@@ -1,0 +1,39 @@
+{
+  "name": "clardex-sdk",
+  "version": "0.1.0",
+  "description": "SDK for swapping and providing liquidity on Clardex pools.",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@stacks/transactions": "^7.1.0",
+    "@stacks/network": "^7.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "eslint": "^9.0.0",
+    "tsup": "^8.0.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.0.5"
+  }
+}
