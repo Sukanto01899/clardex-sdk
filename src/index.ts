@@ -1,4 +1,6 @@
 import {
+  AnchorMode,
+  PostConditionMode,
   boolCV,
   contractPrincipalCV,
   fetchCallReadOnlyFunction,
@@ -63,9 +65,9 @@ export type ContractCall = {
 };
 
 export type SwapExecutionOptions = {
-  network: unknown;
-  anchorMode: unknown;
-  postConditionMode: unknown;
+  network: StacksNetwork;
+  anchorMode: AnchorMode;
+  postConditionMode: PostConditionMode;
   onFinish?: (payload: { txId: string }) => void;
   onCancel?: () => void;
 };
@@ -99,8 +101,10 @@ export type TokenMetadata = {
 
 export type TokenMetadataOptions = {
   network?: Network;
-  baseUrl?: string;
+  metadataBaseUrl?: string;
+  apiBaseUrl?: string;
   cacheTtlMs?: number;
+  fetcher?: typeof fetch;
 };
 
 const DEFAULT_DECIMALS = 1_000_000;
@@ -119,6 +123,9 @@ const metadataCache = new Map<
 const tokenToOptionalCv = (token: TokenRef) => {
   if (token.type === "stx") return noneCV();
   const [address, contractName] = token.contract.split(".");
+  if (!address || !contractName) {
+    throw new Error("Invalid token contract format. Expected address.contract");
+  }
   return someCV(contractPrincipalCV(address, contractName));
 };
 
@@ -128,7 +135,13 @@ export const parseTokenId = (id: string) => {
 };
 
 export const getMetadataBaseUrl = (opts: TokenMetadataOptions = {}) => {
-  if (opts.baseUrl) return opts.baseUrl;
+  if (opts.metadataBaseUrl) return opts.metadataBaseUrl;
+  const network = opts.network ?? "mainnet";
+  return API_BY_NETWORK[network];
+};
+
+export const getApiBaseUrl = (opts: TokenMetadataOptions = {}) => {
+  if (opts.apiBaseUrl) return opts.apiBaseUrl;
   const network = opts.network ?? "mainnet";
   return API_BY_NETWORK[network];
 };
@@ -137,6 +150,12 @@ export const buildTokenMetadataUrl = (
   contractPrincipal: string,
   opts: TokenMetadataOptions = {},
 ) => `${getMetadataBaseUrl(opts)}/metadata/v1/ft/${contractPrincipal}`;
+
+const getFetch = (opts: TokenMetadataOptions = {}) => {
+  if (opts.fetcher) return opts.fetcher;
+  if (typeof fetch !== "undefined") return fetch;
+  throw new Error("No fetch implementation available. Provide opts.fetcher.");
+};
 
 const toMicro = (amount: number, decimals: number) =>
   BigInt(Math.floor(amount * decimals));
@@ -184,7 +203,8 @@ export const fetchTokenMetadata = async (
   opts: TokenMetadataOptions = {},
 ) => {
   const url = buildTokenMetadataUrl(contractPrincipal, opts);
-  const res = await fetch(url);
+  const fetcher = getFetch(opts);
+  const res = await fetcher(url);
   if (!res.ok) {
     throw new Error(`Metadata not found (${res.status})`);
   }
@@ -212,8 +232,9 @@ export const validateSip10Token = async (
   if (!address || !contractName) {
     return { ok: false, message: "Invalid contract identifier." };
   }
-  const res = await fetch(
-    `${getMetadataBaseUrl(opts)}/v2/contracts/interface/${address}/${contractName}`,
+  const fetcher = getFetch(opts);
+  const res = await fetcher(
+    `${getApiBaseUrl(opts)}/v2/contracts/interface/${address}/${contractName}`,
   );
   if (!res.ok) {
     return { ok: false, message: "Contract interface not found." };

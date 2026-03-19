@@ -9,6 +9,7 @@ import {
   parseTokenId,
   buildTokenMetadataUrl,
   getMetadataBaseUrl,
+  getApiBaseUrl,
 } from "../src/index";
 import { cvToValue } from "@stacks/transactions";
 
@@ -114,5 +115,10 @@ describe("clardex-sdk builders", () => {
       network: "testnet",
     });
     expect(url).toContain(base);
+  });
+
+  it("builds api base url", () => {
+    const base = getApiBaseUrl({ network: "testnet" });
+    expect(base).toContain("testnet");
   });
 });
