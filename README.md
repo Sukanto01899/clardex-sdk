@@ -15,6 +15,8 @@ import { openContractCall } from "@stacks/connect";
 import {
   buildSwapCall,
   executeSwap,
+  executeAddLiquidity,
+  executeRemoveLiquidity,
   buildAddLiquidityCall,
   buildRemoveLiquidityCall,
 } from "clardex-sdk";
@@ -48,6 +50,33 @@ await executeSwap(openContractCall, {
   recipient: "SP...user",
   deadline: 123456,
   direction: "x-to-y",
+}, {
+  network,
+  anchorMode: AnchorMode.Any,
+  postConditionMode: PostConditionMode.Allow,
+});
+
+await executeAddLiquidity(openContractCall, {
+  pool: { address: "SP...", name: "dex-pool-v5" },
+  tokenX: { type: "stx" },
+  tokenY: { type: "sip10", contract: "SP...token-y" },
+  amountX: 5,
+  amountY: 100,
+  minShares: 0,
+  initializing: true,
+}, {
+  network,
+  anchorMode: AnchorMode.Any,
+  postConditionMode: PostConditionMode.Allow,
+});
+
+await executeRemoveLiquidity(openContractCall, {
+  pool: { address: "SP...", name: "dex-pool-v5" },
+  tokenX: { type: "sip10", contract: "SP...token-x" },
+  tokenY: { type: "sip10", contract: "SP...token-y" },
+  shares: 10,
+  minX: 0,
+  minY: 0,
 }, {
   network,
   anchorMode: AnchorMode.Any,
@@ -88,6 +117,8 @@ const validation = await validateSip10Token("SP...token-x::token-x", {
 
 - `buildSwapCall(params)`
 - `executeSwap(openContractCall, params, options)`
+- `executeAddLiquidity(openContractCall, params, options)`
+- `executeRemoveLiquidity(openContractCall, params, options)`
 - `buildAddLiquidityCall(params)`
 - `buildRemoveLiquidityCall(params)`
 - `buildQuoteXForYCall(pool, amountIn, decimals?)`

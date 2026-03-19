@@ -354,6 +354,30 @@ export const executeSwap = async (
   });
 };
 
+export const executeAddLiquidity = async (
+  openContractCall: OpenContractCall,
+  params: AddLiquidityParams,
+  options: SwapExecutionOptions,
+) => {
+  const call = buildAddLiquidityCall(params);
+  return openContractCall({
+    ...call,
+    ...options,
+  });
+};
+
+export const executeRemoveLiquidity = async (
+  openContractCall: OpenContractCall,
+  params: RemoveLiquidityParams,
+  options: SwapExecutionOptions,
+) => {
+  const call = buildRemoveLiquidityCall(params);
+  return openContractCall({
+    ...call,
+    ...options,
+  });
+};
+
 export const buildAddLiquidityCall = (
   params: AddLiquidityParams,
 ): ContractCall => {
