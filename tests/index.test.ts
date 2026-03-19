@@ -1,4 +1,3 @@
-import { describe, it, expect } from "vitest";
 import {
   buildAddLiquidityCall,
   buildRemoveLiquidityCall,
@@ -13,12 +12,11 @@ import {
 } from "../src/index";
 import { cvToValue } from "@stacks/transactions";
 
-const pool = { address: "SP000000000000000000002Q6VF78", name: "dex-pool-v5" };
-
-const sipToken = { type: "sip10" as const, contract: "SP000000000000000000002Q6VF78.token-x" };
-const stxToken = { type: "stx" as const };
-
 describe("clardex-sdk builders", () => {
+  const pool = { address: "SP000000000000000000002Q6VF78", name: "dex-pool-v5" };
+  const sipToken = { type: "sip10" as const, contract: "SP000000000000000000002Q6VF78.token-x" };
+  const stxToken = { type: "stx" as const };
+
   it("builds swap call", () => {
     const call = buildSwapCall({
       pool,
