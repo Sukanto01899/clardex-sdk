@@ -503,10 +503,13 @@ export const fetchQuoteXForY = async (
     senderAddress,
     network,
   });
-  const value = unwrapReadOnlyOk(result) as { dy?: unknown; fee?: unknown };
+  const value = unwrapReadOnlyOk(result) as Record<string, unknown>;
   return {
-    amountOut: parseClarityNumber(value.dy) / decimals,
-    fee: parseClarityNumber(value.fee) / decimals,
+    amountOut:
+      parseClarityNumber(
+        value.dy ?? value.amountOut ?? value["amount-out"] ?? 0,
+      ) / decimals,
+    fee: parseClarityNumber(value.fee ?? 0) / decimals,
   };
 };
 
@@ -526,12 +529,20 @@ export const fetchQuoteYForX = async (
     senderAddress,
     network,
   });
-  const value = unwrapReadOnlyOk(result) as { dx?: unknown; fee?: unknown };
+  const value = unwrapReadOnlyOk(result) as Record<string, unknown>;
   return {
-    amountOut: parseClarityNumber(value.dx) / decimals,
-    fee: parseClarityNumber(value.fee) / decimals,
+    amountOut:
+      parseClarityNumber(
+        value.dx ?? value.amountOut ?? value["amount-out"] ?? 0,
+      ) / decimals,
+    fee: parseClarityNumber(value.fee ?? 0) / decimals,
   };
 };
+
+export const buildPoolSnapshotCalls = (pool: PoolContract) => ({
+  reserves: buildGetReservesCall(pool),
+  totalSupply: buildGetTotalSupplyCall(pool),
+});
 
 export const fetchPoolState = async (
   network: StacksNetwork,

@@ -6,6 +6,7 @@ import {
   buildQuoteYForXCall,
   buildGetReservesCall,
   buildGetTotalSupplyCall,
+  buildPoolSnapshotCalls,
   parseTokenId,
   buildTokenMetadataUrl,
   getMetadataBaseUrl,
@@ -86,6 +87,12 @@ describe("clardex-sdk builders", () => {
     const supply = buildGetTotalSupplyCall(pool);
     expect(reserves.functionName).toBe("get-reserves");
     expect(supply.functionName).toBe("get-total-supply");
+  });
+
+  it("builds pool snapshot calls", () => {
+    const snapshot = buildPoolSnapshotCalls(pool);
+    expect(snapshot.reserves.functionName).toBe("get-reserves");
+    expect(snapshot.totalSupply.functionName).toBe("get-total-supply");
   });
 
   it("swap args are clarity values", () => {
