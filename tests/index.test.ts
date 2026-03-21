@@ -63,6 +63,25 @@ describe("clardex-sdk builders", () => {
     expect(minOut).toBe(200_000_000n);
   });
 
+  it("builds swap call with string amounts", () => {
+    const call = buildSwapCall({
+      pool,
+      tokenX: sipToken,
+      tokenY: sipToken,
+      amountIn: "1.25",
+      minOut: "0.5",
+      recipient: "SP000000000000000000002Q6VF78",
+      deadline: 123,
+      direction: "x-to-y",
+      decimalsIn: 1_000_000,
+      decimalsOut: 1_000_000,
+    });
+    const amountIn = unwrapUint(cvToValue(call.functionArgs[2] as never));
+    const minOut = unwrapUint(cvToValue(call.functionArgs[3] as never));
+    expect(amountIn).toBe(1_250_000n);
+    expect(minOut).toBe(500_000n);
+  });
+
   it("builds add liquidity init call", () => {
     const call = buildAddLiquidityCall({
       pool,
@@ -107,6 +126,23 @@ describe("clardex-sdk builders", () => {
     const amountY = unwrapUint(cvToValue(call.functionArgs[3] as never));
     expect(amountX).toBe(1_000_000n);
     expect(amountY).toBe(200_000_000n);
+  });
+
+  it("builds remove liquidity call with string mins", () => {
+    const call = buildRemoveLiquidityCall({
+      pool,
+      tokenX: sipToken,
+      tokenY: sipToken,
+      shares: 10,
+      minX: "1.5",
+      minY: "2",
+      decimalsX: 1_000_000,
+      decimalsY: 1_000_000,
+    });
+    const minX = unwrapUint(cvToValue(call.functionArgs[3] as never));
+    const minY = unwrapUint(cvToValue(call.functionArgs[4] as never));
+    expect(minX).toBe(1_500_000n);
+    expect(minY).toBe(2_000_000n);
   });
 
   it("builds remove liquidity call", () => {

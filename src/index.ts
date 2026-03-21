@@ -28,8 +28,8 @@ export type SwapParams = {
   pool: PoolContract;
   tokenX: TokenRef;
   tokenY: TokenRef;
-  amountIn: number;
-  minOut: number;
+  amountIn: number | string | bigint;
+  minOut: number | string | bigint;
   recipient: string;
   deadline: number;
   direction: "x-to-y" | "y-to-x";
@@ -42,8 +42,8 @@ export type AddLiquidityParams = {
   pool: PoolContract;
   tokenX: TokenRef;
   tokenY: TokenRef;
-  amountX: number;
-  amountY: number;
+  amountX: number | string | bigint;
+  amountY: number | string | bigint;
   minShares: number;
   initializing: boolean;
   decimals?: number;
@@ -56,8 +56,8 @@ export type RemoveLiquidityParams = {
   tokenX: TokenRef;
   tokenY: TokenRef;
   shares: number;
-  minX: number;
-  minY: number;
+  minX: number | string | bigint;
+  minY: number | string | bigint;
   decimals?: number;
   decimalsX?: number;
   decimalsY?: number;
@@ -163,8 +163,37 @@ const getFetch = (opts: TokenMetadataOptions = {}) => {
   throw new Error("No fetch implementation available. Provide opts.fetcher.");
 };
 
-const toMicro = (amount: number, decimals: number) =>
-  BigInt(Math.floor(amount * decimals));
+const toMicro = (amount: number | string | bigint, decimals: number) => {
+  const decimalsInt = Math.floor(decimals);
+  if (!Number.isFinite(decimalsInt) || decimalsInt <= 0) {
+    throw new Error("Invalid decimals value.");
+  }
+  if (typeof amount === "bigint") {
+    return amount * BigInt(decimalsInt);
+  }
+  if (typeof amount === "number") {
+    return BigInt(Math.floor(amount * decimalsInt));
+  }
+  if (typeof amount !== "string") {
+    throw new Error("Invalid amount type.");
+  }
+  const trimmed = amount.trim();
+  if (!trimmed) throw new Error("Amount string is empty.");
+  const sign = trimmed.startsWith("-") ? -1n : 1n;
+  const numeric = trimmed.replace(/^[-+]/, "");
+  if (!/^\d+(\.\d+)?$/.test(numeric)) {
+    throw new Error("Invalid decimal string.");
+  }
+  const [wholeRaw, fracRaw = ""] = numeric.split(".");
+  const precision = Math.round(Math.log10(decimalsInt));
+  if (10 ** precision !== decimalsInt) {
+    throw new Error("String amounts require power-of-10 decimals.");
+  }
+  const fracPadded = `${fracRaw}000000000000000000`.slice(0, precision);
+  const whole = BigInt(wholeRaw || "0");
+  const frac = BigInt(fracPadded || "0");
+  return sign * (whole * BigInt(decimalsInt) + frac);
+};
 
 const parseClarityNumber = (value: unknown): number => {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
