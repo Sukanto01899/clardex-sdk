@@ -34,6 +34,8 @@ export type SwapParams = {
   deadline: number;
   direction: "x-to-y" | "y-to-x";
   decimals?: number;
+  decimalsIn?: number;
+  decimalsOut?: number;
 };
 
 export type AddLiquidityParams = {
@@ -45,6 +47,8 @@ export type AddLiquidityParams = {
   minShares: number;
   initializing: boolean;
   decimals?: number;
+  decimalsX?: number;
+  decimalsY?: number;
 };
 
 export type RemoveLiquidityParams = {
@@ -55,6 +59,8 @@ export type RemoveLiquidityParams = {
   minX: number;
   minY: number;
   decimals?: number;
+  decimalsX?: number;
+  decimalsY?: number;
 };
 
 export type ContractCall = {
@@ -343,11 +349,12 @@ export const fetchTokenInfo = async (
 };
 
 export const buildSwapCall = (params: SwapParams): ContractCall => {
-  const decimals = params.decimals ?? DEFAULT_DECIMALS;
+  const decimalsIn = params.decimalsIn ?? params.decimals ?? DEFAULT_DECIMALS;
+  const decimalsOut = params.decimalsOut ?? params.decimals ?? DEFAULT_DECIMALS;
   const functionName =
     params.direction === "x-to-y" ? "swap-x-for-y" : "swap-y-for-x";
-  const amountMicro = toMicro(params.amountIn, decimals);
-  const minOutMicro = toMicro(params.minOut, decimals);
+  const amountMicro = toMicro(params.amountIn, decimalsIn);
+  const minOutMicro = toMicro(params.minOut, decimalsOut);
   return {
     contractAddress: params.pool.address,
     contractName: params.pool.name,
@@ -402,9 +409,10 @@ export const executeRemoveLiquidity = async (
 export const buildAddLiquidityCall = (
   params: AddLiquidityParams,
 ): ContractCall => {
-  const decimals = params.decimals ?? DEFAULT_DECIMALS;
-  const amountXMicro = toMicro(params.amountX, decimals);
-  const amountYMicro = toMicro(params.amountY, decimals);
+  const decimalsX = params.decimalsX ?? params.decimals ?? DEFAULT_DECIMALS;
+  const decimalsY = params.decimalsY ?? params.decimals ?? DEFAULT_DECIMALS;
+  const amountXMicro = toMicro(params.amountX, decimalsX);
+  const amountYMicro = toMicro(params.amountY, decimalsY);
   if (params.initializing) {
     return {
       contractAddress: params.pool.address,
@@ -437,6 +445,8 @@ export const buildAddLiquidityCall = (
 export const buildRemoveLiquidityCall = (
   params: RemoveLiquidityParams,
 ): ContractCall => {
+  const decimalsX = params.decimalsX ?? params.decimals ?? DEFAULT_DECIMALS;
+  const decimalsY = params.decimalsY ?? params.decimals ?? DEFAULT_DECIMALS;
   return {
     contractAddress: params.pool.address,
     contractName: params.pool.name,
@@ -445,8 +455,8 @@ export const buildRemoveLiquidityCall = (
       tokenToOptionalCv(params.tokenX),
       tokenToOptionalCv(params.tokenY),
       uintCV(BigInt(Math.floor(params.shares))),
-      uintCV(BigInt(Math.floor(params.minX))),
-      uintCV(BigInt(Math.floor(params.minY))),
+      uintCV(toMicro(params.minX, decimalsX)),
+      uintCV(toMicro(params.minY, decimalsY)),
     ],
   };
 };
