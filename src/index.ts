@@ -121,6 +121,75 @@ const API_BY_NETWORK: Record<Network, string> = {
   testnet: "https://api.testnet.hiro.so",
 };
 
+const clampNumber = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+
+export const estimatePriceImpactPercent = (
+  amountIn: number,
+  reserveIn: number,
+) => {
+  const amount = Number(amountIn);
+  const reserve = Number(reserveIn);
+  if (!Number.isFinite(amount) || !Number.isFinite(reserve)) return 0;
+  if (amount <= 0 || reserve <= 0) return 0;
+  return (amount / reserve) * 100;
+};
+
+export type SlippageSuggestionOptions = {
+  fallbackPct?: number;
+  basePct?: number;
+  impactMultiplier?: number;
+  minPct?: number;
+  maxPct?: number;
+  stepPct?: number;
+};
+
+export const suggestSlippagePercent = (
+  priceImpactPercent: number,
+  opts: SlippageSuggestionOptions = {},
+) => {
+  const impact = Number(priceImpactPercent);
+  const fallbackPct = opts.fallbackPct ?? 0.5;
+  if (!Number.isFinite(impact) || impact <= 0) return fallbackPct;
+
+  const basePct = opts.basePct ?? 0.3;
+  const impactMultiplier = opts.impactMultiplier ?? 0.2;
+  const minPct = opts.minPct ?? 0.1;
+  const maxPct = opts.maxPct ?? 3;
+  const stepPct = opts.stepPct ?? 0.1;
+
+  const raw = clampNumber(basePct + impact * impactMultiplier, minPct, maxPct);
+  if (!Number.isFinite(stepPct) || stepPct <= 0) {
+    return Math.round(raw * 10) / 10;
+  }
+  const rounded = Math.round(raw / stepPct) * stepPct;
+  return Math.round(rounded * 1000) / 1000;
+};
+
+export const suggestSplitCount = (
+  priceImpactPercent: number,
+  targetImpactPercent = 5,
+) => {
+  const impact = Number(priceImpactPercent);
+  const target = Number(targetImpactPercent);
+  if (!Number.isFinite(impact) || impact <= 0) return 1;
+  if (!Number.isFinite(target) || target <= 0) return 1;
+  if (impact <= target) return 1;
+  return Math.max(2, Math.ceil(impact / target));
+};
+
+export const calculateMinOut = (
+  expectedOut: number,
+  slippagePercent: number,
+) => {
+  const out = Number(expectedOut);
+  const slip = Number(slippagePercent);
+  if (!Number.isFinite(out) || out <= 0) return 0;
+  if (!Number.isFinite(slip) || slip <= 0) return out;
+  const ratio = clampNumber(slip / 100, 0, 1);
+  return out * (1 - ratio);
+};
+
 const metadataCache = new Map<
   string,
   { info: TokenMetadata; fetchedAt: number }

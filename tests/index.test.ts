@@ -11,6 +11,10 @@ import {
   buildTokenMetadataUrl,
   getMetadataBaseUrl,
   getApiBaseUrl,
+  estimatePriceImpactPercent,
+  suggestSlippagePercent,
+  suggestSplitCount,
+  calculateMinOut,
 } from "../src/index";
 import { cvToValue } from "@stacks/transactions";
 
@@ -227,5 +231,31 @@ describe("clardex-sdk builders", () => {
   it("builds api base url", () => {
     const base = getApiBaseUrl({ network: "testnet" });
     expect(base).toContain("testnet");
+  });
+});
+
+describe("clardex-sdk swap helpers", () => {
+  it("estimates price impact as amount/reserve", () => {
+    expect(estimatePriceImpactPercent(5, 100)).toBeCloseTo(5, 8);
+    expect(estimatePriceImpactPercent(0, 100)).toBe(0);
+    expect(estimatePriceImpactPercent(5, 0)).toBe(0);
+  });
+
+  it("suggests slippage similar to the app defaults", () => {
+    expect(suggestSlippagePercent(0)).toBe(0.5);
+    expect(suggestSlippagePercent(10)).toBe(2.3);
+    expect(suggestSlippagePercent(50)).toBe(3);
+  });
+
+  it("suggests split counts for high impact swaps", () => {
+    expect(suggestSplitCount(0, 5)).toBe(1);
+    expect(suggestSplitCount(6, 5)).toBe(2);
+    expect(suggestSplitCount(12, 5)).toBe(3);
+  });
+
+  it("calculates minimum received from slippage", () => {
+    expect(calculateMinOut(100, 1)).toBeCloseTo(99, 8);
+    expect(calculateMinOut(100, 0)).toBe(100);
+    expect(calculateMinOut(100, 250)).toBe(0);
   });
 });
