@@ -4,6 +4,7 @@ import {
   buildSwapCall,
   buildQuoteXForYCall,
   buildQuoteYForXCall,
+  buildQuoteCall,
   buildGetReservesCall,
   buildGetTotalSupplyCall,
   buildPoolSnapshotCalls,
@@ -193,8 +194,12 @@ describe("clardex-sdk builders", () => {
   it("builds quote calls", () => {
     const qx = buildQuoteXForYCall(pool, 1);
     const qy = buildQuoteYForXCall(pool, 1);
+    const qa = buildQuoteCall(pool, 1, "x-to-y");
+    const qb = buildQuoteCall(pool, 1, "y-to-x");
     expect(qx.functionName).toBe("quote-x-for-y");
     expect(qy.functionName).toBe("quote-y-for-x");
+    expect(qa.functionName).toBe("quote-x-for-y");
+    expect(qb.functionName).toBe("quote-y-for-x");
   });
 
   it("builds pool info calls", () => {

@@ -123,10 +123,12 @@ const validation = await validateSip10Token("SP...token-x::token-x", {
 - `buildRemoveLiquidityCall(params)`
 - `buildQuoteXForYCall(pool, amountIn, decimals?)`
 - `buildQuoteYForXCall(pool, amountIn, decimals?)`
+- `buildQuoteCall(pool, amountIn, direction, decimals?)`
 - `buildGetReservesCall(pool)`
 - `buildGetTotalSupplyCall(pool)`
 - `fetchQuoteXForY(network, pool, amountIn, senderAddress, decimals?)`
 - `fetchQuoteYForX(network, pool, amountIn, senderAddress, decimals?)`
+- `fetchQuote(network, params)`
 - `fetchPoolState(network, pool, senderAddress, decimals?)`
 - `fetchTokenInfo(id, opts?)`
 - `fetchTokenMetadata(contractPrincipal, opts?)`

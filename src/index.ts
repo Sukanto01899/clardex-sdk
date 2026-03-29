@@ -87,6 +87,14 @@ export type QuoteResult = {
   fee: number;
 };
 
+export type QuoteParams = {
+  pool: PoolContract;
+  amountIn: number;
+  senderAddress: string;
+  direction: "x-to-y" | "y-to-x";
+  decimals?: number;
+};
+
 export type PoolState = {
   reserveX: number;
   reserveY: number;
@@ -697,6 +705,16 @@ export const buildQuoteYForXCall = (
   functionArgs: [uintCV(toMicroAmount(amountIn, decimals))],
 });
 
+export const buildQuoteCall = (
+  pool: PoolContract,
+  amountIn: number,
+  direction: "x-to-y" | "y-to-x",
+  decimals = DEFAULT_DECIMALS,
+): ContractCall =>
+  direction === "x-to-y"
+    ? buildQuoteXForYCall(pool, amountIn, decimals)
+    : buildQuoteYForXCall(pool, amountIn, decimals);
+
 export const buildGetReservesCall = (pool: PoolContract): ContractCall => ({
   contractAddress: pool.address,
   contractName: pool.name,
@@ -718,23 +736,13 @@ export const fetchQuoteXForY = async (
   senderAddress: string,
   decimals = DEFAULT_DECIMALS,
 ): Promise<QuoteResult> => {
-  const call = buildQuoteXForYCall(pool, amountIn, decimals);
-  const result = await fetchCallReadOnlyFunction({
-    contractAddress: call.contractAddress,
-    contractName: call.contractName,
-    functionName: call.functionName,
-    functionArgs: call.functionArgs,
+  return fetchQuote(network, {
+    pool,
+    amountIn,
     senderAddress,
-    network,
+    direction: "x-to-y",
+    decimals,
   });
-  const value = unwrapReadOnlyOk(result) as Record<string, unknown>;
-  return {
-    amountOut:
-      parseClarityNumber(
-        value.dy ?? value.amountOut ?? value["amount-out"] ?? 0,
-      ) / decimals,
-    fee: parseClarityNumber(value.fee ?? 0) / decimals,
-  };
 };
 
 export const fetchQuoteYForX = async (
@@ -744,20 +752,40 @@ export const fetchQuoteYForX = async (
   senderAddress: string,
   decimals = DEFAULT_DECIMALS,
 ): Promise<QuoteResult> => {
-  const call = buildQuoteYForXCall(pool, amountIn, decimals);
+  return fetchQuote(network, {
+    pool,
+    amountIn,
+    senderAddress,
+    direction: "y-to-x",
+    decimals,
+  });
+};
+
+export const fetchQuote = async (
+  network: StacksNetwork,
+  params: QuoteParams,
+): Promise<QuoteResult> => {
+  const decimals = params.decimals ?? DEFAULT_DECIMALS;
+  const call = buildQuoteCall(
+    params.pool,
+    params.amountIn,
+    params.direction,
+    decimals,
+  );
   const result = await fetchCallReadOnlyFunction({
     contractAddress: call.contractAddress,
     contractName: call.contractName,
     functionName: call.functionName,
     functionArgs: call.functionArgs,
-    senderAddress,
+    senderAddress: params.senderAddress,
     network,
   });
   const value = unwrapReadOnlyOk(result) as Record<string, unknown>;
+  const amountOutKey = params.direction === "x-to-y" ? "dy" : "dx";
   return {
     amountOut:
       parseClarityNumber(
-        value.dx ?? value.amountOut ?? value["amount-out"] ?? 0,
+        value[amountOutKey] ?? value.amountOut ?? value["amount-out"] ?? 0,
       ) / decimals,
     fee: parseClarityNumber(value.fee ?? 0) / decimals,
   };
