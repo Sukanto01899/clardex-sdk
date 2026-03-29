@@ -133,6 +133,11 @@ const validation = await validateSip10Token("SP...token-x::token-x", {
 - `fetchTokenInfo(id, opts?)`
 - `fetchTokenMetadata(contractPrincipal, opts?)`
 - `validateSip10Token(id, opts?)`
+- `buildTokenInfoCacheKey(id, opts?)`
+- `cacheTokenInfo(info, opts?)`
+- `getCachedTokenInfo(id, opts?)`
+- `getTokenMetadataCacheSize()`
+- `clearTokenMetadataCache()`
 - `parseTokenId(id)`
 - `parseTokenIdStrict(id)`
 - `buildTokenId(contractPrincipal, asset)`

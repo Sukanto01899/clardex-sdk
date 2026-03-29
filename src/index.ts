@@ -257,6 +257,44 @@ const metadataCache = new Map<
   { info: TokenMetadata; fetchedAt: number }
 >();
 
+export const buildTokenInfoCacheKey = (
+  id: string,
+  opts: TokenMetadataOptions = {},
+) => `${getMetadataBaseUrl(opts)}:${id}`;
+
+export const getTokenMetadataCacheSize = () => metadataCache.size;
+
+export const clearTokenMetadataCache = () => {
+  const count = metadataCache.size;
+  metadataCache.clear();
+  return count;
+};
+
+export const cacheTokenInfo = (
+  info: TokenMetadata,
+  opts: TokenMetadataOptions & { fetchedAt?: number } = {},
+) => {
+  const cacheKey = buildTokenInfoCacheKey(info.id, opts);
+  const fetchedAt = typeof opts.fetchedAt === "number" ? opts.fetchedAt : Date.now();
+  metadataCache.set(cacheKey, { info, fetchedAt });
+  return cacheKey;
+};
+
+export const getCachedTokenInfo = (
+  id: string,
+  opts: TokenMetadataOptions = {},
+) => {
+  const cacheKey = buildTokenInfoCacheKey(id, opts);
+  const cached = metadataCache.get(cacheKey);
+  if (!cached) return null;
+  const ttl = opts.cacheTtlMs ?? DEFAULT_TTL;
+  if (Date.now() - cached.fetchedAt >= ttl) {
+    metadataCache.delete(cacheKey);
+    return null;
+  }
+  return cached.info;
+};
+
 const tokenToOptionalCv = (token: TokenRef) => {
   if (token.type === "stx") return noneCV();
   const [address, contractName] = token.contract.split(".");
@@ -505,7 +543,7 @@ export const fetchTokenInfo = async (
   id: string,
   opts: TokenMetadataOptions = {},
 ): Promise<TokenMetadata> => {
-  const cacheKey = `${getMetadataBaseUrl(opts)}:${id}`;
+  const cacheKey = buildTokenInfoCacheKey(id, opts);
   const ttl = opts.cacheTtlMs ?? DEFAULT_TTL;
   const cached = metadataCache.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < ttl) {

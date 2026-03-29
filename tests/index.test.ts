@@ -27,6 +27,11 @@ import {
   parseTokenIdStrict,
   buildTokenId,
   isValidTokenId,
+  buildTokenInfoCacheKey,
+  cacheTokenInfo,
+  clearTokenMetadataCache,
+  getCachedTokenInfo,
+  getTokenMetadataCacheSize,
 } from "../src/index";
 import { cvToValue } from "@stacks/transactions";
 
@@ -312,5 +317,34 @@ describe("clardex-sdk swap helpers", () => {
     expect(buildTokenId("SP123.dex", "token")).toBe("SP123.dex::token");
     expect(isValidTokenId("SP123.dex::token")).toBe(true);
     expect(isValidTokenId("STX")).toBe(false);
+  });
+
+  it("manages token metadata cache entries", () => {
+    clearTokenMetadataCache();
+    expect(getTokenMetadataCacheSize()).toBe(0);
+
+    const key = buildTokenInfoCacheKey("STX", { network: "testnet" });
+    expect(key).toContain("testnet");
+
+    cacheTokenInfo(
+      {
+        id: "STX",
+        contract: "",
+        asset: "STX",
+        name: "Stacks",
+        symbol: "STX",
+        image: null,
+        verified: true,
+        isStx: true,
+      },
+      { network: "testnet", fetchedAt: Date.now() - 1000 },
+    );
+
+    expect(getTokenMetadataCacheSize()).toBe(1);
+    expect(getCachedTokenInfo("STX", { network: "testnet" })?.symbol).toBe("STX");
+    expect(getCachedTokenInfo("STX", { network: "testnet", cacheTtlMs: 1 })).toBe(
+      null,
+    );
+    expect(getTokenMetadataCacheSize()).toBe(0);
   });
 });
