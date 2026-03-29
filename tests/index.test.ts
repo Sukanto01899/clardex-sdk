@@ -16,6 +16,7 @@ import {
   suggestSlippagePercent,
   suggestSplitCount,
   calculateMinOut,
+  calculateMinOutMicro,
   buildHiroTxUrl,
   buildHiroAddressUrl,
   buildHiroContractUrl,
@@ -280,6 +281,12 @@ describe("clardex-sdk swap helpers", () => {
     expect(calculateMinOut(100, 1)).toBeCloseTo(99, 8);
     expect(calculateMinOut(100, 0)).toBe(100);
     expect(calculateMinOut(100, 250)).toBe(0);
+  });
+
+  it("calculates minimum received in micro units", () => {
+    expect(calculateMinOutMicro(100_000_000n, 1)).toBe(99_000_000n);
+    expect(calculateMinOutMicro(100_000_000n, 0)).toBe(100_000_000n);
+    expect(calculateMinOutMicro(100_000_000n, 250)).toBe(0n);
   });
 
   it("builds Hiro explorer links", () => {

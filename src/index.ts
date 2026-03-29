@@ -87,12 +87,35 @@ export type QuoteResult = {
   fee: number;
 };
 
+export type QuoteMicroResult = {
+  amountOutMicro: bigint;
+  feeMicro: bigint;
+};
+
 export type QuoteParams = {
   pool: PoolContract;
-  amountIn: number;
+  amountIn: number | string | bigint;
   senderAddress: string;
   direction: "x-to-y" | "y-to-x";
   decimals?: number;
+  decimalsIn?: number;
+  decimalsOut?: number;
+};
+
+export type QuoteDetailedResult = {
+  amountIn: number;
+  amountInMicro: bigint;
+  expectedOut: number;
+  expectedOutMicro: bigint;
+  minOut: number | null;
+  minOutMicro: bigint | null;
+  fee: number;
+  feeMicro: bigint;
+  decimalsIn: number;
+  decimalsOut: number;
+  priceImpactPercent: number | null;
+  suggestedSlippagePercent: number;
+  warnings: string[];
 };
 
 export type PoolState = {
@@ -442,6 +465,28 @@ const parseClarityNumber = (value: unknown): number => {
   return 0;
 };
 
+const parseClarityUInt = (value: unknown): bigint => {
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return 0n;
+    return BigInt(Math.floor(value));
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return 0n;
+    try {
+      return BigInt(trimmed);
+    } catch {
+      return 0n;
+    }
+  }
+  if (value && typeof value === "object") {
+    const record = value as { value?: unknown };
+    if ("value" in record) return parseClarityUInt(record.value);
+  }
+  return 0n;
+};
+
 export const normalizePoolReserves = (
   value: unknown,
   decimals = DEFAULT_DECIMALS,
@@ -767,7 +812,7 @@ export const buildRemoveLiquidityCall = (
 
 export const buildQuoteXForYCall = (
   pool: PoolContract,
-  amountIn: number,
+  amountIn: number | string | bigint,
   decimals = DEFAULT_DECIMALS,
 ): ContractCall => ({
   contractAddress: pool.address,
@@ -778,7 +823,7 @@ export const buildQuoteXForYCall = (
 
 export const buildQuoteYForXCall = (
   pool: PoolContract,
-  amountIn: number,
+  amountIn: number | string | bigint,
   decimals = DEFAULT_DECIMALS,
 ): ContractCall => ({
   contractAddress: pool.address,
@@ -789,7 +834,7 @@ export const buildQuoteYForXCall = (
 
 export const buildQuoteCall = (
   pool: PoolContract,
-  amountIn: number,
+  amountIn: number | string | bigint,
   direction: "x-to-y" | "y-to-x",
   decimals = DEFAULT_DECIMALS,
 ): ContractCall =>
@@ -843,17 +888,31 @@ export const fetchQuoteYForX = async (
   });
 };
 
-export const fetchQuote = async (
+export const calculateMinOutMicro = (
+  expectedOutMicro: bigint,
+  slippagePercent: number,
+) => {
+  const pct = Number(slippagePercent);
+  if (!Number.isFinite(pct) || pct <= 0) return expectedOutMicro;
+  if (pct >= 100) return 0n;
+  const bps = BigInt(Math.ceil(pct * 100)); // 1% = 100 bps
+  const maxBps = 10_000n;
+  const keep = maxBps - (bps > maxBps ? maxBps : bps);
+  return (expectedOutMicro * keep) / maxBps;
+};
+
+export const fetchQuoteMicro = async (
   network: StacksNetwork,
   params: QuoteParams,
-): Promise<QuoteResult> => {
-  const decimals = params.decimals ?? DEFAULT_DECIMALS;
+): Promise<QuoteMicroResult> => {
+  const decimalsIn = params.decimalsIn ?? params.decimals ?? DEFAULT_DECIMALS;
   const call = buildQuoteCall(
     params.pool,
     params.amountIn,
     params.direction,
-    decimals,
+    decimalsIn,
   );
+
   const result = await fetchCallReadOnlyFunction({
     contractAddress: call.contractAddress,
     contractName: call.contractName,
@@ -865,11 +924,106 @@ export const fetchQuote = async (
   const value = unwrapReadOnlyOk(result) as Record<string, unknown>;
   const amountOutKey = params.direction === "x-to-y" ? "dy" : "dx";
   return {
-    amountOut:
-      parseClarityNumber(
-        value[amountOutKey] ?? value.amountOut ?? value["amount-out"] ?? 0,
-      ) / decimals,
-    fee: parseClarityNumber(value.fee ?? 0) / decimals,
+    amountOutMicro: parseClarityUInt(
+      value[amountOutKey] ?? value.amountOut ?? value["amount-out"] ?? 0,
+    ),
+    feeMicro: parseClarityUInt(value.fee ?? 0),
+  };
+};
+
+export const fetchQuote = async (
+  network: StacksNetwork,
+  params: QuoteParams,
+): Promise<QuoteResult> => {
+  const decimalsIn = params.decimalsIn ?? params.decimals ?? DEFAULT_DECIMALS;
+  const decimalsOut = params.decimalsOut ?? params.decimals ?? DEFAULT_DECIMALS;
+  const micro = await fetchQuoteMicro(network, { ...params, decimalsIn, decimalsOut });
+  return {
+    amountOut: fromMicroAmount(micro.amountOutMicro, decimalsOut),
+    fee: fromMicroAmount(micro.feeMicro, decimalsOut),
+  };
+};
+
+const toNumberForEstimates = (
+  amount: number | string | bigint,
+  decimals: number,
+): number | null => {
+  if (typeof amount === "number") return Number.isFinite(amount) ? amount : null;
+  if (typeof amount === "string") {
+    const parsed = Number(amount);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  const decimalsInt = Math.floor(decimals);
+  if (!Number.isFinite(decimalsInt) || decimalsInt <= 0) return null;
+  const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
+  const abs = amount < 0n ? -amount : amount;
+  if (abs > maxSafe * BigInt(decimalsInt)) return null;
+  return Number(amount) / decimalsInt;
+};
+
+export const fetchQuoteDetailed = async (
+  network: StacksNetwork,
+  params: QuoteParams & {
+    slippagePercent?: number;
+    poolState?: PoolState;
+  },
+): Promise<QuoteDetailedResult> => {
+  const decimalsIn = params.decimalsIn ?? params.decimals ?? DEFAULT_DECIMALS;
+  const decimalsOut = params.decimalsOut ?? params.decimals ?? DEFAULT_DECIMALS;
+  const amountInMicro = toMicroAmount(params.amountIn, decimalsIn);
+  const micro = await fetchQuoteMicro(network, { ...params, decimalsIn, decimalsOut });
+
+  const expectedOutMicro = micro.amountOutMicro;
+  const feeMicro = micro.feeMicro;
+
+  const expectedOut = fromMicroAmount(expectedOutMicro, decimalsOut);
+  const fee = fromMicroAmount(feeMicro, decimalsOut);
+  const amountIn = fromMicroAmount(amountInMicro, decimalsIn);
+
+  const minOutMicro =
+    typeof params.slippagePercent === "number"
+      ? calculateMinOutMicro(expectedOutMicro, params.slippagePercent)
+      : null;
+  const minOut =
+    minOutMicro === null ? null : fromMicroAmount(minOutMicro, decimalsOut);
+
+  const warnings: string[] = [];
+  const senderAmountForEstimate = toNumberForEstimates(params.amountIn, decimalsIn);
+  const state =
+    params.poolState ??
+    (await fetchPoolState(network, params.pool, params.senderAddress, DEFAULT_DECIMALS));
+  const reserveIn =
+    params.direction === "x-to-y" ? state.reserveX : state.reserveY;
+
+  const priceImpactPercent =
+    senderAmountForEstimate === null ? null : estimatePriceImpactPercent(senderAmountForEstimate, reserveIn);
+  if (priceImpactPercent === null) {
+    warnings.push("Price impact unavailable (amount too large).");
+  } else if (priceImpactPercent >= 15) {
+    warnings.push("Very high price impact.");
+  } else if (priceImpactPercent >= 5) {
+    warnings.push("High price impact.");
+  }
+
+  const suggestedSlippagePercent = suggestSlippagePercent(priceImpactPercent ?? 0);
+  if (typeof params.slippagePercent === "number" && params.slippagePercent < suggestedSlippagePercent) {
+    warnings.push("Slippage may be too low for current price impact.");
+  }
+
+  return {
+    amountIn,
+    amountInMicro,
+    expectedOut,
+    expectedOutMicro,
+    minOut,
+    minOutMicro,
+    fee,
+    feeMicro,
+    decimalsIn,
+    decimalsOut,
+    priceImpactPercent,
+    suggestedSlippagePercent,
+    warnings,
   };
 };
 

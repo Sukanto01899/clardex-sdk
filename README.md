@@ -88,7 +88,7 @@ await executeRemoveLiquidity(openContractCall, {
 
 ```ts
 import { createNetwork, STACKS_MAINNET } from "@stacks/network";
-import { fetchQuoteXForY, fetchPoolState } from "clardex-sdk";
+import { fetchQuoteXForY, fetchQuoteDetailed, fetchPoolState } from "clardex-sdk";
 
 const network = createNetwork({
   ...STACKS_MAINNET,
@@ -99,6 +99,16 @@ const pool = { address: "SP...", name: "dex-pool-v5" };
 const sender = "SP...user";
 
 const quote = await fetchQuoteXForY(network, pool, 1, sender);
+
+const detailed = await fetchQuoteDetailed(network, {
+  pool,
+  amountIn: "1.0",
+  senderAddress: sender,
+  direction: "x-to-y",
+  decimalsIn: 1_000_000,
+  decimalsOut: 1_000_000,
+  slippagePercent: 0.5,
+});
 const state = await fetchPoolState(network, pool, sender);
 ```
 
@@ -126,9 +136,12 @@ const validation = await validateSip10Token("SP...token-x::token-x", {
 - `buildQuoteCall(pool, amountIn, direction, decimals?)`
 - `buildGetReservesCall(pool)`
 - `buildGetTotalSupplyCall(pool)`
+- `calculateMinOutMicro(expectedOutMicro, slippagePercent)`
 - `fetchQuoteXForY(network, pool, amountIn, senderAddress, decimals?)`
 - `fetchQuoteYForX(network, pool, amountIn, senderAddress, decimals?)`
+- `fetchQuoteMicro(network, params)`
 - `fetchQuote(network, params)`
+- `fetchQuoteDetailed(network, params)`
 - `fetchPoolState(network, pool, senderAddress, decimals?)`
 - `fetchPoolSnapshot(network, pool, senderAddress, decimals?)`
 - `fetchTokenInfo(id, opts?)`
