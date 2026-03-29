@@ -101,6 +101,8 @@ export type PoolState = {
   totalShares: number;
 };
 
+export type PoolSnapshot = PoolState & { fetchedAt: number };
+
 export type TokenMetadata = {
   id: string;
   contract: string;
@@ -438,6 +440,48 @@ const parseClarityNumber = (value: unknown): number => {
     if ("value" in record) return parseClarityNumber(record.value);
   }
   return 0;
+};
+
+export const normalizePoolReserves = (
+  value: unknown,
+  decimals = DEFAULT_DECIMALS,
+) => {
+  const reserveValue = value as
+    | {
+        x?: unknown;
+        y?: unknown;
+        reserveX?: unknown;
+        reserveY?: unknown;
+        "reserve-x"?: unknown;
+        "reserve-y"?: unknown;
+      }
+    | null
+    | undefined;
+  const reserveX =
+    parseClarityNumber(
+      reserveValue?.["reserve-x"] ?? reserveValue?.reserveX ?? reserveValue?.x,
+    ) / decimals;
+  const reserveY =
+    parseClarityNumber(
+      reserveValue?.["reserve-y"] ?? reserveValue?.reserveY ?? reserveValue?.y,
+    ) / decimals;
+  return { reserveX, reserveY };
+};
+
+export const normalizePoolTotalShares = (value: unknown) =>
+  parseClarityNumber(value);
+
+export const normalizePoolState = (
+  reservesValue: unknown,
+  totalSupplyValue: unknown,
+  decimals = DEFAULT_DECIMALS,
+): PoolState => {
+  const reserves = normalizePoolReserves(reservesValue, decimals);
+  return {
+    reserveX: reserves.reserveX,
+    reserveY: reserves.reserveY,
+    totalShares: normalizePoolTotalShares(totalSupplyValue),
+  };
 };
 
 const unwrapReadOnlyOk = (raw: unknown) => {
@@ -834,48 +878,47 @@ export const buildPoolSnapshotCalls = (pool: PoolContract) => ({
   totalSupply: buildGetTotalSupplyCall(pool),
 });
 
+export const fetchPoolSnapshot = async (
+  network: StacksNetwork,
+  pool: PoolContract,
+  senderAddress: string,
+  decimals = DEFAULT_DECIMALS,
+): Promise<PoolSnapshot> => {
+  const [reservesRaw, totalSupplyRaw] = await Promise.all([
+    fetchCallReadOnlyFunction({
+      contractAddress: pool.address,
+      contractName: pool.name,
+      functionName: "get-reserves",
+      functionArgs: [],
+      senderAddress,
+      network,
+    }),
+    fetchCallReadOnlyFunction({
+      contractAddress: pool.address,
+      contractName: pool.name,
+      functionName: "get-total-supply",
+      functionArgs: [],
+      senderAddress,
+      network,
+    }),
+  ]);
+
+  const reservesValue = unwrapReadOnlyOk(reservesRaw);
+  const totalSupplyValue = unwrapReadOnlyOk(totalSupplyRaw);
+  const state = normalizePoolState(reservesValue, totalSupplyValue, decimals);
+  return { ...state, fetchedAt: Date.now() };
+};
+
 export const fetchPoolState = async (
   network: StacksNetwork,
   pool: PoolContract,
   senderAddress: string,
   decimals = DEFAULT_DECIMALS,
 ): Promise<PoolState> => {
-  const reserves = await fetchCallReadOnlyFunction({
-    contractAddress: pool.address,
-    contractName: pool.name,
-    functionName: "get-reserves",
-    functionArgs: [],
-    senderAddress,
-    network,
-  });
-  const totalSupply = await fetchCallReadOnlyFunction({
-    contractAddress: pool.address,
-    contractName: pool.name,
-    functionName: "get-total-supply",
-    functionArgs: [],
-    senderAddress,
-    network,
-  });
-  const reserveValue = unwrapReadOnlyOk(reserves) as {
-    x?: unknown;
-    y?: unknown;
-    reserveX?: unknown;
-    reserveY?: unknown;
-    "reserve-x"?: unknown;
-    "reserve-y"?: unknown;
-  };
-  const totalSupplyValue = parseClarityNumber(unwrapReadOnlyOk(totalSupply));
-  const reserveX =
-    parseClarityNumber(
-      reserveValue["reserve-x"] ?? reserveValue.reserveX ?? reserveValue.x,
-    ) / decimals;
-  const reserveY =
-    parseClarityNumber(
-      reserveValue["reserve-y"] ?? reserveValue.reserveY ?? reserveValue.y,
-    ) / decimals;
+  const snapshot = await fetchPoolSnapshot(network, pool, senderAddress, decimals);
   return {
-    reserveX,
-    reserveY,
-    totalShares: totalSupplyValue,
+    reserveX: snapshot.reserveX,
+    reserveY: snapshot.reserveY,
+    totalShares: snapshot.totalShares,
   };
 };

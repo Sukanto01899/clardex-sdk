@@ -130,6 +130,7 @@ const validation = await validateSip10Token("SP...token-x::token-x", {
 - `fetchQuoteYForX(network, pool, amountIn, senderAddress, decimals?)`
 - `fetchQuote(network, params)`
 - `fetchPoolState(network, pool, senderAddress, decimals?)`
+- `fetchPoolSnapshot(network, pool, senderAddress, decimals?)`
 - `fetchTokenInfo(id, opts?)`
 - `fetchTokenMetadata(contractPrincipal, opts?)`
 - `validateSip10Token(id, opts?)`
@@ -156,6 +157,9 @@ const validation = await validateSip10Token("SP...token-x::token-x", {
 - `buildHiroTxUrl(txid, network?)`
 - `buildHiroAddressUrl(address, network?)`
 - `buildHiroContractUrl(contractPrincipal, network?)`
+- `normalizePoolReserves(value, decimals?)`
+- `normalizePoolTotalShares(value)`
+- `normalizePoolState(reservesValue, totalSupplyValue, decimals?)`
 
 ## License
 MIT

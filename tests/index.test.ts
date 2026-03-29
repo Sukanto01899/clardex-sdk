@@ -32,6 +32,8 @@ import {
   clearTokenMetadataCache,
   getCachedTokenInfo,
   getTokenMetadataCacheSize,
+  normalizePoolReserves,
+  normalizePoolState,
 } from "../src/index";
 import { cvToValue } from "@stacks/transactions";
 
@@ -346,5 +348,16 @@ describe("clardex-sdk swap helpers", () => {
       null,
     );
     expect(getTokenMetadataCacheSize()).toBe(0);
+  });
+
+  it("normalizes pool reserve values", () => {
+    expect(
+      normalizePoolReserves({ "reserve-x": 2_000_000, "reserve-y": 3_000_000 }, 1_000_000),
+    ).toEqual({ reserveX: 2, reserveY: 3 });
+    expect(normalizePoolState({ x: "1000000", y: "500000" }, 123, 1_000_000)).toEqual({
+      reserveX: 1,
+      reserveY: 0.5,
+      totalShares: 123,
+    });
   });
 });
