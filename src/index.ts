@@ -246,7 +246,10 @@ const getFetch = (opts: TokenMetadataOptions = {}) => {
   throw new Error("No fetch implementation available. Provide opts.fetcher.");
 };
 
-const toMicro = (amount: number | string | bigint, decimals: number) => {
+export const toMicroAmount = (
+  amount: number | string | bigint,
+  decimals: number,
+) => {
   const decimalsInt = Math.floor(decimals);
   if (!Number.isFinite(decimalsInt) || decimalsInt <= 0) {
     throw new Error("Invalid decimals value.");
@@ -276,6 +279,28 @@ const toMicro = (amount: number | string | bigint, decimals: number) => {
   const whole = BigInt(wholeRaw || "0");
   const frac = BigInt(fracPadded || "0");
   return sign * (whole * BigInt(decimalsInt) + frac);
+};
+
+export const fromMicroAmount = (
+  amountMicro: number | string | bigint,
+  decimals: number,
+) => {
+  const decimalsInt = Math.floor(decimals);
+  if (!Number.isFinite(decimalsInt) || decimalsInt <= 0) {
+    throw new Error("Invalid decimals value.");
+  }
+
+  if (typeof amountMicro === "bigint") {
+    const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
+    if (amountMicro > maxSafe || amountMicro < -maxSafe) {
+      throw new Error("Micro amount exceeds MAX_SAFE_INTEGER.");
+    }
+    return Number(amountMicro) / decimalsInt;
+  }
+
+  const parsed = typeof amountMicro === "number" ? amountMicro : Number(amountMicro);
+  if (!Number.isFinite(parsed)) return 0;
+  return parsed / decimalsInt;
 };
 
 const parseClarityNumber = (value: unknown): number => {
@@ -465,8 +490,8 @@ export const buildSwapCall = (params: SwapParams): ContractCall => {
   const decimalsOut = params.decimalsOut ?? params.decimals ?? DEFAULT_DECIMALS;
   const functionName =
     params.direction === "x-to-y" ? "swap-x-for-y" : "swap-y-for-x";
-  const amountMicro = toMicro(params.amountIn, decimalsIn);
-  const minOutMicro = toMicro(params.minOut, decimalsOut);
+  const amountMicro = toMicroAmount(params.amountIn, decimalsIn);
+  const minOutMicro = toMicroAmount(params.minOut, decimalsOut);
   return {
     contractAddress: params.pool.address,
     contractName: params.pool.name,
@@ -523,8 +548,8 @@ export const buildAddLiquidityCall = (
 ): ContractCall => {
   const decimalsX = params.decimalsX ?? params.decimals ?? DEFAULT_DECIMALS;
   const decimalsY = params.decimalsY ?? params.decimals ?? DEFAULT_DECIMALS;
-  const amountXMicro = toMicro(params.amountX, decimalsX);
-  const amountYMicro = toMicro(params.amountY, decimalsY);
+  const amountXMicro = toMicroAmount(params.amountX, decimalsX);
+  const amountYMicro = toMicroAmount(params.amountY, decimalsY);
   if (params.initializing) {
     return {
       contractAddress: params.pool.address,
@@ -567,8 +592,8 @@ export const buildRemoveLiquidityCall = (
       tokenToOptionalCv(params.tokenX),
       tokenToOptionalCv(params.tokenY),
       uintCV(BigInt(Math.floor(params.shares))),
-      uintCV(toMicro(params.minX, decimalsX)),
-      uintCV(toMicro(params.minY, decimalsY)),
+      uintCV(toMicroAmount(params.minX, decimalsX)),
+      uintCV(toMicroAmount(params.minY, decimalsY)),
     ],
   };
 };
@@ -581,7 +606,7 @@ export const buildQuoteXForYCall = (
   contractAddress: pool.address,
   contractName: pool.name,
   functionName: "quote-x-for-y",
-  functionArgs: [uintCV(toMicro(amountIn, decimals))],
+  functionArgs: [uintCV(toMicroAmount(amountIn, decimals))],
 });
 
 export const buildQuoteYForXCall = (
@@ -592,7 +617,7 @@ export const buildQuoteYForXCall = (
   contractAddress: pool.address,
   contractName: pool.name,
   functionName: "quote-y-for-x",
-  functionArgs: [uintCV(toMicro(amountIn, decimals))],
+  functionArgs: [uintCV(toMicroAmount(amountIn, decimals))],
 });
 
 export const buildGetReservesCall = (pool: PoolContract): ContractCall => ({

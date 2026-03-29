@@ -17,6 +17,8 @@ import {
   calculateMinOut,
   buildHiroTxUrl,
   buildHiroContractUrl,
+  toMicroAmount,
+  fromMicroAmount,
 } from "../src/index";
 import { cvToValue } from "@stacks/transactions";
 
@@ -270,5 +272,13 @@ describe("clardex-sdk swap helpers", () => {
     ).toBe(
       "https://explorer.hiro.so/contract/SP000000000000000000002Q6VF78/dex-pool-v5?chain=mainnet",
     );
+  });
+
+  it("converts amounts to and from micro units", () => {
+    expect(toMicroAmount(1.25, 1_000_000)).toBe(1_250_000n);
+    expect(toMicroAmount("1.25", 1_000_000)).toBe(1_250_000n);
+    expect(toMicroAmount(2n, 1_000_000)).toBe(2_000_000n);
+    expect(fromMicroAmount(1_250_000n, 1_000_000)).toBeCloseTo(1.25, 8);
+    expect(() => toMicroAmount("1.2", 3)).toThrow();
   });
 });
