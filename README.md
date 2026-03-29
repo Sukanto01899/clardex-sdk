@@ -132,8 +132,23 @@ const validation = await validateSip10Token("SP...token-x::token-x", {
 - `fetchTokenMetadata(contractPrincipal, opts?)`
 - `validateSip10Token(id, opts?)`
 - `parseTokenId(id)`
+- `parseTokenIdStrict(id)`
+- `buildTokenId(contractPrincipal, asset)`
+- `isValidTokenId(id)`
+- `parseContractPrincipal(contractPrincipal)`
+- `buildContractPrincipal(address, name)`
+- `isValidContractPrincipal(contractPrincipal)`
 - `getMetadataBaseUrl(opts?)`
 - `buildTokenMetadataUrl(contractPrincipal, opts?)`
+- `toMicroAmount(amount, decimals)`
+- `fromMicroAmount(amountMicro, decimals)`
+- `estimatePriceImpactPercent(amountIn, reserveIn)`
+- `suggestSlippagePercent(priceImpactPercent, opts?)`
+- `suggestSplitCount(priceImpactPercent, targetImpactPercent?)`
+- `calculateMinOut(expectedOut, slippagePercent)`
+- `buildHiroTxUrl(txid, network?)`
+- `buildHiroAddressUrl(address, network?)`
+- `buildHiroContractUrl(contractPrincipal, network?)`
 
 ## License
 MIT

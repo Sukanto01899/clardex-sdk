@@ -16,9 +16,16 @@ import {
   suggestSplitCount,
   calculateMinOut,
   buildHiroTxUrl,
+  buildHiroAddressUrl,
   buildHiroContractUrl,
   toMicroAmount,
   fromMicroAmount,
+  parseContractPrincipal,
+  buildContractPrincipal,
+  isValidContractPrincipal,
+  parseTokenIdStrict,
+  buildTokenId,
+  isValidTokenId,
 } from "../src/index";
 import { cvToValue } from "@stacks/transactions";
 
@@ -267,6 +274,9 @@ describe("clardex-sdk swap helpers", () => {
     expect(buildHiroTxUrl("0xabc", "testnet")).toBe(
       "https://explorer.hiro.so/txid/0xabc?chain=testnet",
     );
+    expect(buildHiroAddressUrl("SP123", "mainnet")).toBe(
+      "https://explorer.hiro.so/address/SP123?chain=mainnet",
+    );
     expect(
       buildHiroContractUrl("SP000000000000000000002Q6VF78.dex-pool-v5", "mainnet"),
     ).toBe(
@@ -280,5 +290,22 @@ describe("clardex-sdk swap helpers", () => {
     expect(toMicroAmount(2n, 1_000_000)).toBe(2_000_000n);
     expect(fromMicroAmount(1_250_000n, 1_000_000)).toBeCloseTo(1.25, 8);
     expect(() => toMicroAmount("1.2", 3)).toThrow();
+  });
+
+  it("parses and builds contract principals", () => {
+    expect(parseContractPrincipal("SP123.dex")).toEqual({ address: "SP123", name: "dex" });
+    expect(buildContractPrincipal("SP123", "dex")).toBe("SP123.dex");
+    expect(isValidContractPrincipal("SP123.dex")).toBe(true);
+    expect(isValidContractPrincipal("SP123")).toBe(false);
+  });
+
+  it("parses and builds token ids", () => {
+    expect(parseTokenIdStrict("SP123.dex::token")).toEqual({
+      contract: "SP123.dex",
+      asset: "token",
+    });
+    expect(buildTokenId("SP123.dex", "token")).toBe("SP123.dex::token");
+    expect(isValidTokenId("SP123.dex::token")).toBe(true);
+    expect(isValidTokenId("STX")).toBe(false);
   });
 });

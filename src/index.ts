@@ -121,17 +121,57 @@ const API_BY_NETWORK: Record<Network, string> = {
   testnet: "https://api.testnet.hiro.so",
 };
 
+export type ContractPrincipalParts = { address: string; name: string };
+
+export const parseContractPrincipal = (
+  contractPrincipal: string,
+): ContractPrincipalParts => {
+  const raw = String(contractPrincipal || "").trim();
+  const firstDot = raw.indexOf(".");
+  const lastDot = raw.lastIndexOf(".");
+  if (firstDot <= 0 || lastDot !== firstDot || firstDot === raw.length - 1) {
+    throw new Error("Invalid contract principal. Expected address.contract");
+  }
+  const address = raw.slice(0, firstDot);
+  const name = raw.slice(firstDot + 1);
+  if (!address || !name) {
+    throw new Error("Invalid contract principal. Expected address.contract");
+  }
+  return { address, name };
+};
+
+export const isValidContractPrincipal = (contractPrincipal: string) => {
+  try {
+    parseContractPrincipal(contractPrincipal);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const buildContractPrincipal = (address: string, name: string) => {
+  const addr = String(address || "").trim();
+  const contractName = String(name || "").trim();
+  if (!addr || !contractName) {
+    throw new Error("Invalid contract principal parts.");
+  }
+  if (addr.includes(".") || contractName.includes(".")) {
+    throw new Error("Contract principal parts must not include '.'");
+  }
+  return `${addr}.${contractName}`;
+};
+
 export const buildHiroTxUrl = (txid: string, network: Network = "mainnet") =>
   `https://explorer.hiro.so/txid/${txid}?chain=${network}`;
+
+export const buildHiroAddressUrl = (address: string, network: Network = "mainnet") =>
+  `https://explorer.hiro.so/address/${address}?chain=${network}`;
 
 export const buildHiroContractUrl = (
   contractPrincipal: string,
   network: Network = "mainnet",
 ) => {
-  const [address, name] = contractPrincipal.split(".");
-  if (!address || !name) {
-    throw new Error("Invalid contract principal. Expected address.contract");
-  }
+  const { address, name } = parseContractPrincipal(contractPrincipal);
   return `https://explorer.hiro.so/contract/${address}/${name}?chain=${network}`;
 };
 
@@ -221,6 +261,43 @@ const tokenToOptionalCv = (token: TokenRef) => {
 export const parseTokenId = (id: string) => {
   const [contract, asset] = id.split("::");
   return { contract, asset };
+};
+
+export type TokenIdParts = { contract: string; asset: string };
+
+export const parseTokenIdStrict = (id: string): TokenIdParts => {
+  const raw = String(id || "").trim();
+  const parts = raw.split("::");
+  if (parts.length !== 2) {
+    throw new Error("Invalid token id. Expected contract::asset");
+  }
+  const [contract, asset] = parts;
+  if (!contract || !asset) {
+    throw new Error("Invalid token id. Expected contract::asset");
+  }
+  parseContractPrincipal(contract);
+  return { contract, asset };
+};
+
+export const isValidTokenId = (id: string) => {
+  try {
+    parseTokenIdStrict(id);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const buildTokenId = (contractPrincipal: string, asset: string) => {
+  const { address, name } = parseContractPrincipal(contractPrincipal);
+  const assetName = String(asset || "").trim();
+  if (!assetName) {
+    throw new Error("Invalid token asset.");
+  }
+  if (assetName.includes("::")) {
+    throw new Error("Invalid token asset.");
+  }
+  return `${address}.${name}::${assetName}`;
 };
 
 export const getMetadataBaseUrl = (opts: TokenMetadataOptions = {}) => {
