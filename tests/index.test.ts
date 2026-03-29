@@ -15,6 +15,8 @@ import {
   suggestSlippagePercent,
   suggestSplitCount,
   calculateMinOut,
+  buildHiroTxUrl,
+  buildHiroContractUrl,
 } from "../src/index";
 import { cvToValue } from "@stacks/transactions";
 
@@ -257,5 +259,16 @@ describe("clardex-sdk swap helpers", () => {
     expect(calculateMinOut(100, 1)).toBeCloseTo(99, 8);
     expect(calculateMinOut(100, 0)).toBe(100);
     expect(calculateMinOut(100, 250)).toBe(0);
+  });
+
+  it("builds Hiro explorer links", () => {
+    expect(buildHiroTxUrl("0xabc", "testnet")).toBe(
+      "https://explorer.hiro.so/txid/0xabc?chain=testnet",
+    );
+    expect(
+      buildHiroContractUrl("SP000000000000000000002Q6VF78.dex-pool-v5", "mainnet"),
+    ).toBe(
+      "https://explorer.hiro.so/contract/SP000000000000000000002Q6VF78/dex-pool-v5?chain=mainnet",
+    );
   });
 });

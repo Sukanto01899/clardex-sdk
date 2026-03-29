@@ -121,6 +121,20 @@ const API_BY_NETWORK: Record<Network, string> = {
   testnet: "https://api.testnet.hiro.so",
 };
 
+export const buildHiroTxUrl = (txid: string, network: Network = "mainnet") =>
+  `https://explorer.hiro.so/txid/${txid}?chain=${network}`;
+
+export const buildHiroContractUrl = (
+  contractPrincipal: string,
+  network: Network = "mainnet",
+) => {
+  const [address, name] = contractPrincipal.split(".");
+  if (!address || !name) {
+    throw new Error("Invalid contract principal. Expected address.contract");
+  }
+  return `https://explorer.hiro.so/contract/${address}/${name}?chain=${network}`;
+};
+
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
