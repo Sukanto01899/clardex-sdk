@@ -2,6 +2,8 @@ import {
   buildAddLiquidityCall,
   buildRemoveLiquidityCall,
   buildSwapCall,
+  buildSwapPostConditions,
+  buildAddLiquidityPostConditions,
   buildQuoteXForYCall,
   buildQuoteYForXCall,
   buildQuoteCall,
@@ -67,6 +69,49 @@ describe("clardex-sdk builders", () => {
     });
     expect(call.functionName).toBe("swap-x-for-y");
     expect(call.functionArgs).toHaveLength(6);
+  });
+
+  it("builds swap post conditions (sip10 input)", () => {
+    const pcs = buildSwapPostConditions({
+      senderAddress: "SP000000000000000000002Q6VF78",
+      tokenIn: sipToken,
+      amountIn: 1,
+      decimalsIn: 1_000_000,
+    });
+    expect(pcs).toHaveLength(1);
+    expect(pcs[0]).toMatchObject({
+      type: "ft-postcondition",
+      address: "SP000000000000000000002Q6VF78",
+      condition: "lte",
+      amount: "1000000",
+      asset: "SP000000000000000000002Q6VF78.token-x::token-x",
+    });
+  });
+
+  it("builds add liquidity post conditions (stx + sip10)", () => {
+    const pcs = buildAddLiquidityPostConditions({
+      senderAddress: "SP000000000000000000002Q6VF78",
+      tokenX: stxToken,
+      tokenY: sipToken,
+      amountX: "1.5",
+      amountY: 2,
+      decimalsX: 1_000_000,
+      decimalsY: 1_000_000,
+    });
+    expect(pcs).toHaveLength(2);
+    expect(pcs[0]).toMatchObject({
+      type: "stx-postcondition",
+      address: "SP000000000000000000002Q6VF78",
+      condition: "lte",
+      amount: "1500000",
+    });
+    expect(pcs[1]).toMatchObject({
+      type: "ft-postcondition",
+      address: "SP000000000000000000002Q6VF78",
+      condition: "lte",
+      amount: "2000000",
+      asset: "SP000000000000000000002Q6VF78.token-x::token-x",
+    });
   });
 
   it("builds swap call with per-token decimals", () => {

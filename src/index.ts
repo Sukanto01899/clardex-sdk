@@ -5,10 +5,12 @@ import {
   contractPrincipalCV,
   fetchCallReadOnlyFunction,
   noneCV,
+  Pc,
   someCV,
   standardPrincipalCV,
   uintCV,
   cvToValue,
+  type PostCondition,
   type ClarityValue,
 } from "@stacks/transactions";
 import type { StacksNetwork } from "@stacks/network";
@@ -22,7 +24,7 @@ export type PoolContract = {
 
 export type TokenRef =
   | { type: "stx" }
-  | { type: "sip10"; contract: string };
+  | { type: "sip10"; contract: string; asset?: string };
 
 export type SwapParams = {
   pool: PoolContract;
@@ -207,6 +209,20 @@ export const buildContractPrincipal = (address: string, name: string) => {
     throw new Error("Contract principal parts must not include '.'");
   }
   return `${addr}.${contractName}`;
+};
+
+export const getSip10AssetName = (token: Extract<TokenRef, { type: "sip10" }>) => {
+  const explicit = String(token.asset ?? "").trim();
+  if (explicit) return explicit;
+  const { name } = parseContractPrincipal(token.contract);
+  return name;
+};
+
+type ContractIdString = `${string}.${string}`;
+
+const toContractIdString = (contractPrincipal: string): ContractIdString => {
+  const { address, name } = parseContractPrincipal(contractPrincipal);
+  return `${address}.${name}` as ContractIdString;
 };
 
 export const buildHiroTxUrl = (txid: string, network: Network = "mainnet") =>
@@ -732,6 +748,72 @@ export const buildSwapCall = (params: SwapParams): ContractCall => {
       uintCV(BigInt(params.deadline)),
     ],
   };
+};
+
+export const buildSwapPostConditions = (params: {
+  senderAddress: string;
+  tokenIn: TokenRef;
+  amountIn: number | string | bigint;
+  decimalsIn?: number;
+  decimals?: number;
+}): PostCondition[] => {
+  const decimalsIn = params.decimalsIn ?? params.decimals ?? DEFAULT_DECIMALS;
+  const amountInMicro = toMicroAmount(params.amountIn, decimalsIn);
+  const sender = String(params.senderAddress || "").trim();
+  if (!sender) throw new Error("senderAddress is required.");
+
+  if (params.tokenIn.type === "stx") {
+    return [Pc.principal(sender).willSendLte(amountInMicro).ustx()];
+  }
+
+  return [
+    Pc.principal(sender)
+      .willSendLte(amountInMicro)
+      .ft(toContractIdString(params.tokenIn.contract), getSip10AssetName(params.tokenIn)),
+  ];
+};
+
+export const buildAddLiquidityPostConditions = (params: {
+  senderAddress: string;
+  tokenX: TokenRef;
+  tokenY: TokenRef;
+  amountX: number | string | bigint;
+  amountY: number | string | bigint;
+  decimalsX?: number;
+  decimalsY?: number;
+  decimals?: number;
+}): PostCondition[] => {
+  const sender = String(params.senderAddress || "").trim();
+  if (!sender) throw new Error("senderAddress is required.");
+
+  const decimalsX = params.decimalsX ?? params.decimals ?? DEFAULT_DECIMALS;
+  const decimalsY = params.decimalsY ?? params.decimals ?? DEFAULT_DECIMALS;
+  const amountXMicro = toMicroAmount(params.amountX, decimalsX);
+  const amountYMicro = toMicroAmount(params.amountY, decimalsY);
+
+  const pcs: PostCondition[] = [];
+
+  if (params.tokenX.type === "stx") {
+    pcs.push(Pc.principal(sender).willSendLte(amountXMicro).ustx());
+  } else {
+    pcs.push(
+      Pc.principal(sender)
+        .willSendLte(amountXMicro)
+        .ft(toContractIdString(params.tokenX.contract), getSip10AssetName(params.tokenX)),
+    );
+  }
+
+  if (params.tokenY.type === "stx") {
+    pcs.push(Pc.principal(sender).willSendLte(amountYMicro).ustx());
+  } else {
+    pcs.push(
+      Pc.principal(sender)
+        .willSendLte(amountYMicro)
+        .ft(toContractIdString(params.tokenY.contract), getSip10AssetName(params.tokenY)),
+    );
+  }
+
+  return pcs;
 };
 
 export const executeSwap = async (

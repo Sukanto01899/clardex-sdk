@@ -14,6 +14,7 @@ npm i clardex-sdk
 import { openContractCall } from "@stacks/connect";
 import {
   buildSwapCall,
+  buildSwapPostConditions,
   executeSwap,
   executeAddLiquidity,
   executeRemoveLiquidity,
@@ -38,6 +39,13 @@ await openContractCall({
   network,
   anchorMode: AnchorMode.Any,
   postConditionMode: PostConditionMode.Allow,
+  // Safety: cap what the sender can spend
+  postConditions: buildSwapPostConditions({
+    senderAddress: "SP...user",
+    tokenIn: { type: "sip10", contract: "SP...token-x", asset: "token-x" },
+    amountIn: 10,
+    decimalsIn: 1_000_000,
+  }),
 });
 
 // or use the helper
@@ -138,10 +146,12 @@ const validation = await validateSip10Token("SP...token-x::token-x", {
 ## API
 
 - `buildSwapCall(params)`
+- `buildSwapPostConditions(params)`
 - `executeSwap(openContractCall, params, options)`
 - `executeAddLiquidity(openContractCall, params, options)`
 - `executeRemoveLiquidity(openContractCall, params, options)`
 - `buildAddLiquidityCall(params)`
+- `buildAddLiquidityPostConditions(params)`
 - `buildRemoveLiquidityCall(params)`
 - `buildQuoteXForYCall(pool, amountIn, decimals?)`
 - `buildQuoteYForXCall(pool, amountIn, decimals?)`
