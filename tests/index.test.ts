@@ -35,6 +35,7 @@ import {
   getTokenMetadataCacheSize,
   normalizePoolReserves,
   normalizePoolState,
+  findMinAmountInMicroForExactOut,
 } from "../src/index";
 import { cvToValue } from "@stacks/transactions";
 
@@ -366,5 +367,29 @@ describe("clardex-sdk swap helpers", () => {
       reserveY: 0.5,
       totalShares: 123,
     });
+  });
+
+  it("finds minimum input for an exact output (binary search)", async () => {
+    const res = await findMinAmountInMicroForExactOut({
+      desiredOutMicro: 10n,
+      maxInMicro: 10n,
+      quoteOutMicro: async (amountInMicro) => amountInMicro * 2n,
+      maxIterations: 32,
+    });
+    expect(res.reachable).toBe(true);
+    expect(res.amountInMicro).toBe(5n);
+    expect(res.amountOutMicro).toBe(10n);
+  });
+
+  it("returns unreachable when exact output exceeds max input", async () => {
+    const res = await findMinAmountInMicroForExactOut({
+      desiredOutMicro: 25n,
+      maxInMicro: 10n,
+      quoteOutMicro: async (amountInMicro) => amountInMicro * 2n,
+      maxIterations: 16,
+    });
+    expect(res.reachable).toBe(false);
+    expect(res.amountInMicro).toBe(10n);
+    expect(res.amountOutMicro).toBe(20n);
   });
 });

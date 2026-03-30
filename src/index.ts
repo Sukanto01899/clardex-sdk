@@ -126,6 +126,21 @@ export type PoolState = {
 
 export type PoolSnapshot = PoolState & { fetchedAt: number };
 
+export type ExactOutQuoteResult = {
+  desiredOut: number;
+  desiredOutMicro: bigint;
+  amountIn: number | null;
+  amountInMicro: bigint;
+  expectedOut: number;
+  expectedOutMicro: bigint;
+  fee: number;
+  feeMicro: bigint;
+  decimalsIn: number;
+  decimalsOut: number;
+  iterations: number;
+  warnings: string[];
+};
+
 export type TokenMetadata = {
   id: string;
   contract: string;
@@ -913,6 +928,35 @@ export const fetchQuoteMicro = async (
     decimalsIn,
   );
 
+  return fetchQuoteMicroFromAmountInMicro(network, {
+    pool: params.pool,
+    amountInMicro: parseClarityUInt(cvToValue(call.functionArgs[0] as never)),
+    direction: params.direction,
+    senderAddress: params.senderAddress,
+  });
+};
+
+export const buildQuoteCallFromMicro = (
+  pool: PoolContract,
+  amountInMicro: bigint,
+  direction: "x-to-y" | "y-to-x",
+): ContractCall => ({
+  contractAddress: pool.address,
+  contractName: pool.name,
+  functionName: direction === "x-to-y" ? "quote-x-for-y" : "quote-y-for-x",
+  functionArgs: [uintCV(amountInMicro)],
+});
+
+export const fetchQuoteMicroFromAmountInMicro = async (
+  network: StacksNetwork,
+  params: {
+    pool: PoolContract;
+    amountInMicro: bigint;
+    senderAddress: string;
+    direction: "x-to-y" | "y-to-x";
+  },
+): Promise<QuoteMicroResult> => {
+  const call = buildQuoteCallFromMicro(params.pool, params.amountInMicro, params.direction);
   const result = await fetchCallReadOnlyFunction({
     contractAddress: call.contractAddress,
     contractName: call.contractName,
@@ -928,6 +972,64 @@ export const fetchQuoteMicro = async (
       value[amountOutKey] ?? value.amountOut ?? value["amount-out"] ?? 0,
     ),
     feeMicro: parseClarityUInt(value.fee ?? 0),
+  };
+};
+
+export const findMinAmountInMicroForExactOut = async (opts: {
+  desiredOutMicro: bigint;
+  maxInMicro: bigint;
+  quoteOutMicro: (amountInMicro: bigint) => Promise<bigint>;
+  maxIterations?: number;
+}): Promise<{
+  reachable: boolean;
+  amountInMicro: bigint;
+  amountOutMicro: bigint;
+  iterations: number;
+}> => {
+  const desiredOutMicro = opts.desiredOutMicro;
+  const maxInMicro = opts.maxInMicro;
+  const maxIterations = Math.max(1, Math.floor(opts.maxIterations ?? 32));
+
+  if (desiredOutMicro <= 0n) {
+    return { reachable: true, amountInMicro: 0n, amountOutMicro: 0n, iterations: 0 };
+  }
+  if (maxInMicro <= 0n) {
+    return { reachable: false, amountInMicro: 0n, amountOutMicro: 0n, iterations: 0 };
+  }
+
+  let low = 0n;
+  let high = maxInMicro;
+  let bestIn: bigint | null = null;
+  let bestOut = 0n;
+
+  for (let i = 0; i < maxIterations && low <= high; i++) {
+    const mid = (low + high) / 2n;
+    const out = await opts.quoteOutMicro(mid);
+    if (out >= desiredOutMicro) {
+      bestIn = mid;
+      bestOut = out;
+      if (mid === 0n) break;
+      high = mid - 1n;
+    } else {
+      low = mid + 1n;
+    }
+  }
+
+  if (bestIn === null) {
+    const outAtMax = await opts.quoteOutMicro(maxInMicro);
+    return {
+      reachable: false,
+      amountInMicro: maxInMicro,
+      amountOutMicro: outAtMax,
+      iterations: maxIterations,
+    };
+  }
+
+  return {
+    reachable: true,
+    amountInMicro: bestIn,
+    amountOutMicro: bestOut,
+    iterations: maxIterations,
   };
 };
 
@@ -1027,6 +1129,73 @@ export const fetchQuoteDetailed = async (
   };
 };
 
+export const fetchQuoteExactOut = async (
+  network: StacksNetwork,
+  params: {
+    pool: PoolContract;
+    senderAddress: string;
+    direction: "x-to-y" | "y-to-x";
+    desiredOut: number | string | bigint;
+    maxAmountIn: number | string | bigint;
+    decimalsIn?: number;
+    decimalsOut?: number;
+    decimals?: number;
+    maxIterations?: number;
+  },
+): Promise<ExactOutQuoteResult> => {
+  const decimalsIn = params.decimalsIn ?? params.decimals ?? DEFAULT_DECIMALS;
+  const decimalsOut = params.decimalsOut ?? params.decimals ?? DEFAULT_DECIMALS;
+  const desiredOutMicro = toMicroAmount(params.desiredOut, decimalsOut);
+  const maxInMicro = toMicroAmount(params.maxAmountIn, decimalsIn);
+
+  const search = await findMinAmountInMicroForExactOut({
+    desiredOutMicro,
+    maxInMicro,
+    maxIterations: params.maxIterations,
+    quoteOutMicro: async (amountInMicro) => {
+      const q = await fetchQuoteMicroFromAmountInMicro(network, {
+        pool: params.pool,
+        amountInMicro,
+        senderAddress: params.senderAddress,
+        direction: params.direction,
+      });
+      return q.amountOutMicro;
+    },
+  });
+
+  const quote = await fetchQuoteMicroFromAmountInMicro(network, {
+    pool: params.pool,
+    amountInMicro: search.amountInMicro,
+    senderAddress: params.senderAddress,
+    direction: params.direction,
+  });
+
+  const warnings: string[] = [];
+  if (!search.reachable) warnings.push("Desired output not reachable within maxAmountIn.");
+
+  let amountIn: number | null = null;
+  try {
+    amountIn = fromMicroAmount(search.amountInMicro, decimalsIn);
+  } catch {
+    amountIn = null;
+  }
+
+  return {
+    desiredOut: fromMicroAmount(desiredOutMicro, decimalsOut),
+    desiredOutMicro,
+    amountIn,
+    amountInMicro: search.amountInMicro,
+    expectedOut: fromMicroAmount(quote.amountOutMicro, decimalsOut),
+    expectedOutMicro: quote.amountOutMicro,
+    fee: fromMicroAmount(quote.feeMicro, decimalsOut),
+    feeMicro: quote.feeMicro,
+    decimalsIn,
+    decimalsOut,
+    iterations: search.iterations,
+    warnings,
+  };
+};
+
 export const buildPoolSnapshotCalls = (pool: PoolContract) => ({
   reserves: buildGetReservesCall(pool),
   totalSupply: buildGetTotalSupplyCall(pool),
@@ -1061,6 +1230,52 @@ export const fetchPoolSnapshot = async (
   const totalSupplyValue = unwrapReadOnlyOk(totalSupplyRaw);
   const state = normalizePoolState(reservesValue, totalSupplyValue, decimals);
   return { ...state, fetchedAt: Date.now() };
+};
+
+export type WatchPoolOptions = {
+  intervalMs?: number;
+  immediate?: boolean;
+  decimals?: number;
+  onError?: (error: unknown) => void;
+  signal?: AbortSignal;
+};
+
+export const watchPoolSnapshot = (
+  network: StacksNetwork,
+  pool: PoolContract,
+  senderAddress: string,
+  onSnapshot: (snapshot: PoolSnapshot) => void,
+  opts: WatchPoolOptions = {},
+) => {
+  const intervalMs = Math.max(250, Math.floor(opts.intervalMs ?? 15_000));
+  const decimals = opts.decimals ?? DEFAULT_DECIMALS;
+  let stopped = false;
+
+  const tick = async () => {
+    if (stopped) return;
+    try {
+      const snapshot = await fetchPoolSnapshot(network, pool, senderAddress, decimals);
+      onSnapshot(snapshot);
+    } catch (error) {
+      opts.onError?.(error);
+    }
+  };
+
+  if (opts.immediate ?? true) void tick();
+  const id = setInterval(() => void tick(), intervalMs);
+
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    clearInterval(id);
+  };
+
+  if (opts.signal) {
+    if (opts.signal.aborted) stop();
+    else opts.signal.addEventListener("abort", stop, { once: true });
+  }
+
+  return stop;
 };
 
 export const fetchPoolState = async (

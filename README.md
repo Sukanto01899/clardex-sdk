@@ -109,6 +109,18 @@ const detailed = await fetchQuoteDetailed(network, {
   decimalsOut: 1_000_000,
   slippagePercent: 0.5,
 });
+
+// "Exact out" quoting (find the minimum input needed for a desired output)
+// Note: requires a max input cap.
+// const exactOut = await fetchQuoteExactOut(network, {
+//   pool,
+//   senderAddress: sender,
+//   direction: "x-to-y",
+//   desiredOut: "10",
+//   maxAmountIn: "20",
+//   decimalsIn: 1_000_000,
+//   decimalsOut: 1_000_000,
+// });
 const state = await fetchPoolState(network, pool, sender);
 ```
 
@@ -134,16 +146,21 @@ const validation = await validateSip10Token("SP...token-x::token-x", {
 - `buildQuoteXForYCall(pool, amountIn, decimals?)`
 - `buildQuoteYForXCall(pool, amountIn, decimals?)`
 - `buildQuoteCall(pool, amountIn, direction, decimals?)`
+- `buildQuoteCallFromMicro(pool, amountInMicro, direction)`
 - `buildGetReservesCall(pool)`
 - `buildGetTotalSupplyCall(pool)`
 - `calculateMinOutMicro(expectedOutMicro, slippagePercent)`
 - `fetchQuoteXForY(network, pool, amountIn, senderAddress, decimals?)`
 - `fetchQuoteYForX(network, pool, amountIn, senderAddress, decimals?)`
 - `fetchQuoteMicro(network, params)`
+- `fetchQuoteMicroFromAmountInMicro(network, params)`
 - `fetchQuote(network, params)`
 - `fetchQuoteDetailed(network, params)`
+- `findMinAmountInMicroForExactOut(opts)`
+- `fetchQuoteExactOut(network, params)`
 - `fetchPoolState(network, pool, senderAddress, decimals?)`
 - `fetchPoolSnapshot(network, pool, senderAddress, decimals?)`
+- `watchPoolSnapshot(network, pool, senderAddress, onSnapshot, opts?)`
 - `fetchTokenInfo(id, opts?)`
 - `fetchTokenMetadata(contractPrincipal, opts?)`
 - `validateSip10Token(id, opts?)`
