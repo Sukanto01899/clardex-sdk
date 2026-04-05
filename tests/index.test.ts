@@ -24,9 +24,13 @@ import {
   buildHiroContractUrl,
   toMicroAmount,
   fromMicroAmount,
+  formatMicroAmount,
   parseContractPrincipal,
   buildContractPrincipal,
   isValidContractPrincipal,
+  isValidStacksAddress,
+  nowSeconds,
+  deadlineSecondsFromNow,
   parseTokenIdStrict,
   buildTokenId,
   isValidTokenId,
@@ -355,6 +359,23 @@ describe("clardex-sdk swap helpers", () => {
     expect(toMicroAmount(2n, 1_000_000)).toBe(2_000_000n);
     expect(fromMicroAmount(1_250_000n, 1_000_000)).toBeCloseTo(1.25, 8);
     expect(() => toMicroAmount("1.2", 3)).toThrow();
+  });
+
+  it("formats micro amounts without losing precision", () => {
+    expect(formatMicroAmount(1_250_000n, 1_000_000)).toBe("1.25");
+    expect(formatMicroAmount(1_000_000n, 1_000_000)).toBe("1");
+    expect(formatMicroAmount(100n, 1_000_000)).toBe("0.0001");
+    expect(formatMicroAmount(1_250_000n, 1_000_000, { maxFractionDigits: 1 })).toBe(
+      "1.2",
+    );
+    expect(formatMicroAmount(-1_000_000n, 1_000_000)).toBe("-1");
+  });
+
+  it("validates stacks addresses and builds deadlines", () => {
+    expect(isValidStacksAddress("SP000000000000000000002Q6VF78")).toBe(true);
+    expect(isValidStacksAddress("not-an-address")).toBe(false);
+    expect(nowSeconds(new Date(0))).toBe(0);
+    expect(deadlineSecondsFromNow(10, 100)).toBe(700);
   });
 
   it("parses and builds contract principals", () => {

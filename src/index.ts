@@ -9,6 +9,7 @@ import {
   someCV,
   standardPrincipalCV,
   uintCV,
+  validateStacksAddress,
   cvToValue,
   type PostCondition,
   type ClarityValue,
@@ -238,6 +239,17 @@ export const buildHiroContractUrl = (
   const { address, name } = parseContractPrincipal(contractPrincipal);
   return `https://explorer.hiro.so/contract/${address}/${name}?chain=${network}`;
 };
+
+export const isValidStacksAddress = (address: string) =>
+  validateStacksAddress(String(address || "").trim());
+
+export const nowSeconds = (date: Date = new Date()) =>
+  Math.floor(date.getTime() / 1000);
+
+export const deadlineSecondsFromNow = (
+  minutesFromNow: number,
+  now = nowSeconds(),
+) => now + Math.max(0, Math.floor(Number(minutesFromNow) * 60));
 
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -480,6 +492,47 @@ export const fromMicroAmount = (
   const parsed = typeof amountMicro === "number" ? amountMicro : Number(amountMicro);
   if (!Number.isFinite(parsed)) return 0;
   return parsed / decimalsInt;
+};
+
+export const formatMicroAmount = (
+  amountMicro: number | string | bigint,
+  decimals: number,
+  opts: { maxFractionDigits?: number; trimTrailingZeros?: boolean } = {},
+) => {
+  const decimalsInt = Math.floor(decimals);
+  if (!Number.isFinite(decimalsInt) || decimalsInt <= 0) {
+    throw new Error("Invalid decimals value.");
+  }
+  const precision = Math.round(Math.log10(decimalsInt));
+  if (10 ** precision !== decimalsInt) {
+    throw new Error("formatMicroAmount requires power-of-10 decimals.");
+  }
+
+  const micro =
+    typeof amountMicro === "bigint"
+      ? amountMicro
+      : typeof amountMicro === "number"
+        ? BigInt(Math.floor(amountMicro))
+        : BigInt(String(amountMicro).trim() || "0");
+
+  const sign = micro < 0n ? "-" : "";
+  const abs = micro < 0n ? -micro : micro;
+  const base = BigInt(decimalsInt);
+
+  const whole = abs / base;
+  const frac = abs % base;
+  let fracStr = frac.toString().padStart(precision, "0");
+
+  const maxFractionDigits =
+    typeof opts.maxFractionDigits === "number"
+      ? Math.max(0, Math.min(precision, Math.floor(opts.maxFractionDigits)))
+      : precision;
+  if (maxFractionDigits < precision) fracStr = fracStr.slice(0, maxFractionDigits);
+
+  const trim = opts.trimTrailingZeros ?? true;
+  if (trim && fracStr) fracStr = fracStr.replace(/0+$/, "");
+
+  return fracStr ? `${sign}${whole.toString()}.${fracStr}` : `${sign}${whole.toString()}`;
 };
 
 const parseClarityNumber = (value: unknown): number => {
@@ -1332,24 +1385,41 @@ export const watchPoolSnapshot = (
   const intervalMs = Math.max(250, Math.floor(opts.intervalMs ?? 15_000));
   const decimals = opts.decimals ?? DEFAULT_DECIMALS;
   let stopped = false;
+  let inFlight = false;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const tick = async () => {
-    if (stopped) return;
+    if (stopped || inFlight) return;
+    inFlight = true;
     try {
-      const snapshot = await fetchPoolSnapshot(network, pool, senderAddress, decimals);
+      const snapshot = await fetchPoolSnapshot(
+        network,
+        pool,
+        senderAddress,
+        decimals,
+      );
       onSnapshot(snapshot);
     } catch (error) {
       opts.onError?.(error);
+    } finally {
+      inFlight = false;
+      if (!stopped) {
+        timeoutId = setTimeout(() => void tick(), intervalMs);
+      }
     }
   };
 
-  if (opts.immediate ?? true) void tick();
-  const id = setInterval(() => void tick(), intervalMs);
+  const immediate = opts.immediate ?? true;
+  if (immediate) void tick();
+  else timeoutId = setTimeout(() => void tick(), intervalMs);
 
   const stop = () => {
     if (stopped) return;
     stopped = true;
-    clearInterval(id);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
   };
 
   if (opts.signal) {

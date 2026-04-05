@@ -190,6 +190,7 @@ const validation = await validateSip10Token("SP...token-x::token-x", {
 - `buildTokenMetadataUrl(contractPrincipal, opts?)`
 - `toMicroAmount(amount, decimals)`
 - `fromMicroAmount(amountMicro, decimals)`
+- `formatMicroAmount(amountMicro, decimals, opts?)`
 - `estimatePriceImpactPercent(amountIn, reserveIn)`
 - `suggestSlippagePercent(priceImpactPercent, opts?)`
 - `suggestSplitCount(priceImpactPercent, targetImpactPercent?)`
@@ -197,6 +198,9 @@ const validation = await validateSip10Token("SP...token-x::token-x", {
 - `buildHiroTxUrl(txid, network?)`
 - `buildHiroAddressUrl(address, network?)`
 - `buildHiroContractUrl(contractPrincipal, network?)`
+- `isValidStacksAddress(address)`
+- `nowSeconds(date?)`
+- `deadlineSecondsFromNow(minutesFromNow, nowSeconds?)`
 - `normalizePoolReserves(value, decimals?)`
 - `normalizePoolTotalShares(value)`
 - `normalizePoolState(reservesValue, totalSupplyValue, decimals?)`
