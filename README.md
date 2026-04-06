@@ -141,6 +141,8 @@ const info = await fetchTokenInfo("SP...token-x::token-x", { network: "mainnet" 
 const validation = await validateSip10Token("SP...token-x::token-x", {
   network: "mainnet",
 });
+
+// Options (all optional): cacheTtlMs, fetcher, signal, retries, retryDelayMs, retryBackoffFactor
 ```
 
 ## API

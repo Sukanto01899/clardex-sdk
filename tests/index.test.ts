@@ -39,6 +39,7 @@ import {
   clearTokenMetadataCache,
   getCachedTokenInfo,
   getTokenMetadataCacheSize,
+  fetchTokenInfo,
   normalizePoolReserves,
   normalizePoolState,
   findMinAmountInMicroForExactOut,
@@ -422,6 +423,93 @@ describe("clardex-sdk swap helpers", () => {
       null,
     );
     expect(getTokenMetadataCacheSize()).toBe(0);
+  });
+
+  it("retries token metadata fetches", async () => {
+    clearTokenMetadataCache();
+    const tokenId = "SP000000000000000000002Q6VF78.token-x::token-x";
+
+    let calls = 0;
+    const fetcher = async () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response("server error", { status: 500 });
+      }
+      return new Response(JSON.stringify({ name: "Token X", symbol: "X" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    const info = await fetchTokenInfo(tokenId, {
+      metadataBaseUrl: "https://example.invalid",
+      fetcher: fetcher as unknown as typeof fetch,
+      retries: 1,
+      retryDelayMs: 0,
+      retryBackoffFactor: 1,
+    });
+
+    expect(calls).toBe(2);
+    expect(info.verified).toBe(true);
+    expect(info.name).toBe("Token X");
+    expect(info.symbol).toBe("X");
+  });
+
+  it("dedupes concurrent fetchTokenInfo calls", async () => {
+    clearTokenMetadataCache();
+    const tokenId = "SP000000000000000000002Q6VF78.token-x::token-x";
+
+    let calls = 0;
+    const fetcher = async () => {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return new Response(JSON.stringify({ name: "Token X", symbol: "X" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    const opts = {
+      metadataBaseUrl: "https://example.invalid",
+      fetcher: fetcher as unknown as typeof fetch,
+      cacheTtlMs: 60_000,
+      retries: 0,
+    };
+
+    const [a, b] = await Promise.all([
+      fetchTokenInfo(tokenId, opts),
+      fetchTokenInfo(tokenId, opts),
+    ]);
+
+    expect(calls).toBe(1);
+    expect(a.symbol).toBe("X");
+    expect(b.symbol).toBe("X");
+  });
+
+  it("supports aborting metadata fetches via signal", async () => {
+    clearTokenMetadataCache();
+    const tokenId = "SP000000000000000000002Q6VF78.token-x::token-x";
+
+    let calls = 0;
+    const fetcher = async () => {
+      calls += 1;
+      return new Response(JSON.stringify({ name: "Token X", symbol: "X" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    const controller = new AbortController();
+    controller.abort();
+    const info = await fetchTokenInfo(tokenId, {
+      metadataBaseUrl: "https://example.invalid",
+      fetcher: fetcher as unknown as typeof fetch,
+      signal: controller.signal,
+    });
+
+    expect(calls).toBe(0);
+    expect(info.verified).toBe(false);
+    expect(info.error).toContain("Aborted");
   });
 
   it("normalizes pool reserve values", () => {

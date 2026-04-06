@@ -162,6 +162,10 @@ export type TokenMetadataOptions = {
   apiBaseUrl?: string;
   cacheTtlMs?: number;
   fetcher?: typeof fetch;
+  signal?: AbortSignal;
+  retries?: number;
+  retryDelayMs?: number;
+  retryBackoffFactor?: number;
 };
 
 const DEFAULT_DECIMALS = 1_000_000;
@@ -324,6 +328,7 @@ const metadataCache = new Map<
   string,
   { info: TokenMetadata; fetchedAt: number }
 >();
+const tokenInfoInFlight = new Map<string, Promise<TokenMetadata>>();
 
 export const buildTokenInfoCacheKey = (
   id: string,
@@ -435,6 +440,72 @@ const getFetch = (opts: TokenMetadataOptions = {}) => {
   if (opts.fetcher) return opts.fetcher;
   if (typeof fetch !== "undefined") return fetch;
   throw new Error("No fetch implementation available. Provide opts.fetcher.");
+};
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const wait = Math.max(0, Math.floor(ms));
+    if (!wait) {
+      resolve();
+      return;
+    }
+
+    if (signal?.aborted) {
+      reject(new Error("Aborted"));
+      return;
+    }
+
+    const id = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, wait);
+
+    const onAbort = () => {
+      clearTimeout(id);
+      cleanup();
+      reject(new Error("Aborted"));
+    };
+
+    const cleanup = () => {
+      if (!signal) return;
+      signal.removeEventListener("abort", onAbort);
+    };
+
+    if (signal) signal.addEventListener("abort", onAbort, { once: true });
+  });
+
+const isRetryableStatus = (status: number) =>
+  status === 408 || status === 429 || (status >= 500 && status <= 599);
+
+const fetchWithRetry = async (
+  fetcher: typeof fetch,
+  url: string,
+  init: RequestInit,
+  opts: Pick<
+    TokenMetadataOptions,
+    "signal" | "retries" | "retryDelayMs" | "retryBackoffFactor"
+  >,
+) => {
+  const retries = Math.max(0, Math.floor(opts.retries ?? 2));
+  const retryDelayMs = Math.max(0, Math.floor(opts.retryDelayMs ?? 250));
+  const retryBackoffFactor = Math.max(1, Number(opts.retryBackoffFactor ?? 2));
+
+  let attempt = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    if (opts.signal?.aborted) throw new Error("Aborted");
+    try {
+      const res = await fetcher(url, { ...init, signal: opts.signal });
+      if (!isRetryableStatus(res.status) || attempt >= retries) {
+        return res;
+      }
+    } catch (error) {
+      if (attempt >= retries) throw error;
+    }
+    const backoff = retryDelayMs * retryBackoffFactor ** attempt;
+    attempt += 1;
+    await sleep(backoff, opts.signal);
+  }
 };
 
 export const toMicroAmount = (
@@ -643,7 +714,12 @@ export const fetchTokenMetadata = async (
 ) => {
   const url = buildTokenMetadataUrl(contractPrincipal, opts);
   const fetcher = getFetch(opts);
-  const res = await fetcher(url);
+  const res = await fetchWithRetry(
+    fetcher,
+    url,
+    { headers: { accept: "application/json" } },
+    opts,
+  );
   if (!res.ok) {
     throw new Error(`Metadata not found (${res.status})`);
   }
@@ -672,8 +748,11 @@ export const validateSip10Token = async (
     return { ok: false, message: "Invalid contract identifier." };
   }
   const fetcher = getFetch(opts);
-  const res = await fetcher(
+  const res = await fetchWithRetry(
+    fetcher,
     `${getApiBaseUrl(opts)}/v2/contracts/interface/${address}/${contractName}`,
+    { headers: { accept: "application/json" } },
+    opts,
   );
   if (!res.ok) {
     return { ok: false, message: "Contract interface not found." };
@@ -717,67 +796,83 @@ export const fetchTokenInfo = async (
   opts: TokenMetadataOptions = {},
 ): Promise<TokenMetadata> => {
   const cacheKey = buildTokenInfoCacheKey(id, opts);
-  const ttl = opts.cacheTtlMs ?? DEFAULT_TTL;
-  const cached = metadataCache.get(cacheKey);
-  if (cached && Date.now() - cached.fetchedAt < ttl) {
-    return cached.info;
+  const cached = getCachedTokenInfo(id, opts);
+  if (cached) return cached;
+
+  if (!opts.signal) {
+    const inFlight = tokenInfoInFlight.get(cacheKey);
+    if (inFlight) return inFlight;
   }
 
-  if (id === "STX") {
-    const info: TokenMetadata = {
-      id,
-      contract: "",
-      asset: "STX",
-      name: "Stacks",
-      symbol: "STX",
-      image: null,
-      verified: true,
-      isStx: true,
-    };
-    metadataCache.set(cacheKey, { info, fetchedAt: Date.now() });
-    return info;
+  const run = async (): Promise<TokenMetadata> => {
+    if (id === "STX") {
+      const info: TokenMetadata = {
+        id,
+        contract: "",
+        asset: "STX",
+        name: "Stacks",
+        symbol: "STX",
+        image: null,
+        verified: true,
+        isStx: true,
+      };
+      cacheTokenInfo(info, opts);
+      return info;
+    }
+
+    if (!id.includes("::")) {
+      return {
+        id,
+        contract: "",
+        asset: "",
+        verified: false,
+        isStx: false,
+        error: "Token id must be contract::asset",
+      };
+    }
+
+    const { contract, asset } = parseTokenId(id);
+    try {
+      const data = await fetchTokenMetadata(contract, opts);
+      const info: TokenMetadata = {
+        id,
+        contract,
+        asset,
+        name: data?.name,
+        symbol: data?.symbol,
+        image:
+          data?.image_thumbnail_uri ||
+          data?.image_uri ||
+          data?.metadata?.cached_thumbnail_image ||
+          data?.metadata?.cached_image ||
+          null,
+        verified: true,
+        isStx: false,
+      };
+      cacheTokenInfo(info, opts);
+      return info;
+    } catch (error) {
+      return {
+        id,
+        contract,
+        asset,
+        verified: false,
+        isStx: false,
+        error: error instanceof Error ? error.message : "Metadata fetch failed",
+      };
+    }
+  };
+
+  if (opts.signal) {
+    return run();
   }
 
-  if (!id.includes("::")) {
-    return {
-      id,
-      contract: "",
-      asset: "",
-      verified: false,
-      isStx: false,
-      error: "Token id must be contract::asset",
-    };
-  }
-
-  const { contract, asset } = parseTokenId(id);
+  const promise = run();
+  tokenInfoInFlight.set(cacheKey, promise);
   try {
-    const data = await fetchTokenMetadata(contract, opts);
-    const info: TokenMetadata = {
-      id,
-      contract,
-      asset,
-      name: data?.name,
-      symbol: data?.symbol,
-      image:
-        data?.image_thumbnail_uri ||
-        data?.image_uri ||
-        data?.metadata?.cached_thumbnail_image ||
-        data?.metadata?.cached_image ||
-        null,
-      verified: true,
-      isStx: false,
-    };
-    metadataCache.set(cacheKey, { info, fetchedAt: Date.now() });
-    return info;
-  } catch (error) {
-    return {
-      id,
-      contract,
-      asset,
-      verified: false,
-      isStx: false,
-      error: error instanceof Error ? error.message : "Metadata fetch failed",
-    };
+    return await promise;
+  } finally {
+    tokenInfoInFlight.delete(cacheKey);
   }
 };
 
