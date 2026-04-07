@@ -5,7 +5,7 @@ SDK for swapping and providing liquidity on Clardex pools.
 ## Install
 
 ```bash
-npm i clardex-sdk
+npm i @clardex/clardex-sdk
 ```
 
 ## Usage (openContractCall)
@@ -20,7 +20,7 @@ import {
   executeRemoveLiquidity,
   buildAddLiquidityCall,
   buildRemoveLiquidityCall,
-} from "clardex-sdk";
+} from "@clardex/clardex-sdk";
 import { AnchorMode, PostConditionMode } from "@stacks/transactions";
 
 const swap = buildSwapCall({
@@ -96,7 +96,7 @@ await executeRemoveLiquidity(openContractCall, {
 
 ```ts
 import { createNetwork, STACKS_MAINNET } from "@stacks/network";
-import { fetchQuoteXForY, fetchQuoteDetailed, fetchPoolState } from "clardex-sdk";
+import { fetchQuoteXForY, fetchQuoteDetailed, fetchPoolState } from "@clardex/clardex-sdk";
 
 const network = createNetwork({
   ...STACKS_MAINNET,
@@ -137,7 +137,7 @@ const state = await fetchPoolState(network, pool, sender);
 If you prefer not to pass `network`, `pool`, and `senderAddress` into every call, you can use the lightweight client wrapper.
 
 ```ts
-import { createClardexClient, createHiroNetwork, poolFromContractPrincipal } from "clardex-sdk";
+import { createClardexClient, createHiroNetwork, poolFromContractPrincipal } from "@clardex/clardex-sdk";
 
 const network = createHiroNetwork("testnet");
 const pool = poolFromContractPrincipal("SP...dex-pool-v5");
@@ -159,7 +159,7 @@ const quote = await client.fetchQuoteDetailed({
 ## Token metadata
 
 ```ts
-import { fetchTokenInfo, validateSip10Token } from "clardex-sdk";
+import { fetchTokenInfo, validateSip10Token } from "@clardex/clardex-sdk";
 
 const info = await fetchTokenInfo("SP...token-x::token-x", { network: "mainnet" });
 const validation = await validateSip10Token("SP...token-x::token-x", {
@@ -233,3 +233,20 @@ const validation = await validateSip10Token("SP...token-x::token-x", {
 
 ## License
 MIT
+
+## Publish
+
+Manual publish:
+
+```bash
+npm login
+npm run release:check
+npm run release:publish
+```
+
+GitHub Actions publish:
+
+1. Add an `NPM_TOKEN` repository secret in GitHub.
+2. Push a tag like `v0.1.0`.
+3. The workflow lives in `.github/workflows/publish.yml` inside the `clardex-sdk` repo.
+4. The actual publish commands live in `package.json`, so local and CI both use the same SDK-folder logic.

@@ -1,13 +1,32 @@
 {
-  "name": "clardex-sdk",
+  "name": "@clardex/clardex-sdk",
   "version": "0.1.0",
   "description": "SDK for swapping and providing liquidity on Clardex pools.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sukanto01899/clardex-sdk.git"
+  },
+  "homepage": "https://github.com/Sukanto01899/clardex-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/Sukanto01899/clardex-sdk/issues"
+  },
+  "keywords": [
+    "stacks",
+    "clarity",
+    "dex",
+    "swap",
+    "sdk",
+    "defi"
+  ],
   "type": "module",
   "sideEffects": false,
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -24,7 +43,9 @@
     "build": "tsup src/index.ts --format esm,cjs --dts --clean --sourcemap",
     "dev": "tsup src/index.ts --format esm,cjs --dts --clean --sourcemap --watch",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "release:check": "npm run lint && npm run build",
+    "release:publish": "npm publish --access public"
   },
   "dependencies": {
     "@stacks/network": "^7.3.1",
