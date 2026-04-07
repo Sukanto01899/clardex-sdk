@@ -132,6 +132,30 @@ const detailed = await fetchQuoteDetailed(network, {
 const state = await fetchPoolState(network, pool, sender);
 ```
 
+## Convenience client + network
+
+If you prefer not to pass `network`, `pool`, and `senderAddress` into every call, you can use the lightweight client wrapper.
+
+```ts
+import { createClardexClient, createHiroNetwork, poolFromContractPrincipal } from "clardex-sdk";
+
+const network = createHiroNetwork("testnet");
+const pool = poolFromContractPrincipal("SP...dex-pool-v5");
+
+const client = createClardexClient({
+  network,
+  pool,
+  senderAddress: "SP...user",
+  decimals: 1_000_000,
+});
+
+const quote = await client.fetchQuoteDetailed({
+  amountIn: "1.0",
+  direction: "x-to-y",
+  slippagePercent: 0.5,
+});
+```
+
 ## Token metadata
 
 ```ts

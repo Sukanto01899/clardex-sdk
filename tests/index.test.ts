@@ -14,6 +14,9 @@ import {
   buildTokenMetadataUrl,
   getMetadataBaseUrl,
   getApiBaseUrl,
+  createHiroNetwork,
+  poolFromContractPrincipal,
+  createClardexClient,
   estimatePriceImpactPercent,
   suggestSlippagePercent,
   suggestSplitCount,
@@ -60,6 +63,37 @@ describe("clardex-sdk builders", () => {
   const pool = { address: "SP000000000000000000002Q6VF78", name: "dex-pool-v5" };
   const sipToken = { type: "sip10" as const, contract: "SP000000000000000000002Q6VF78.token-x" };
   const stxToken = { type: "stx" as const };
+
+  it("creates a Hiro network wrapper", () => {
+    const net = createHiroNetwork("testnet");
+    expect(net.client.baseUrl).toContain("api.testnet.hiro.so");
+  });
+
+  it("creates pool parts from a contract principal", () => {
+    expect(poolFromContractPrincipal("SP000000000000000000002Q6VF78.dex-pool-v5")).toEqual(pool);
+  });
+
+  it("creates an ergonomic client wrapper", () => {
+    const client = createClardexClient({
+      network: createHiroNetwork("testnet"),
+      pool,
+      senderAddress: "SP000000000000000000002Q6VF78",
+    });
+
+    const call = client.buildSwapCall({
+      tokenX: sipToken,
+      tokenY: sipToken,
+      amountIn: 1,
+      minOut: 0.9,
+      recipient: "SP000000000000000000002Q6VF78",
+      deadline: 123,
+      direction: "x-to-y",
+    });
+
+    expect(call.functionName).toBe("swap-x-for-y");
+    expect(call.contractAddress).toBe(pool.address);
+    expect(call.contractName).toBe(pool.name);
+  });
 
   it("builds swap call", () => {
     const call = buildSwapCall({

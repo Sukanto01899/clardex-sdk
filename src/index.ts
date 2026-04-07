@@ -14,7 +14,12 @@ import {
   type PostCondition,
   type ClarityValue,
 } from "@stacks/transactions";
-import type { StacksNetwork } from "@stacks/network";
+import {
+  STACKS_MAINNET,
+  STACKS_TESTNET,
+  createNetwork,
+  type StacksNetwork,
+} from "@stacks/network";
 
 export type Network = "mainnet" | "testnet";
 
@@ -176,6 +181,33 @@ const API_BY_NETWORK: Record<Network, string> = {
   testnet: "https://api.testnet.hiro.so",
 };
 
+export type CreateHiroNetworkOptions = {
+  network: Network;
+  apiBaseUrl?: string;
+};
+
+export const createHiroNetwork = (
+  opts: CreateHiroNetworkOptions | Network = "mainnet",
+): StacksNetwork => {
+  const network = typeof opts === "string" ? opts : opts.network;
+  const apiBaseUrl =
+    typeof opts === "string" ? undefined : (opts.apiBaseUrl ?? undefined);
+
+  const base = network === "mainnet" ? STACKS_MAINNET : STACKS_TESTNET;
+  const baseUrl = apiBaseUrl ?? API_BY_NETWORK[network];
+
+  return createNetwork({
+    ...base,
+    addressVersion: { ...base.addressVersion },
+    client: { ...base.client, baseUrl },
+  });
+};
+
+export const poolFromContractPrincipal = (contractPrincipal: string): PoolContract => {
+  const { address, name } = parseContractPrincipal(contractPrincipal);
+  return { address, name };
+};
+
 export type ContractPrincipalParts = { address: string; name: string };
 
 export const parseContractPrincipal = (
@@ -242,6 +274,122 @@ export const buildHiroContractUrl = (
 ) => {
   const { address, name } = parseContractPrincipal(contractPrincipal);
   return `https://explorer.hiro.so/contract/${address}/${name}?chain=${network}`;
+};
+
+export type ClardexClientOptions = {
+  network: StacksNetwork;
+  pool: PoolContract;
+  senderAddress?: string;
+  decimals?: number;
+};
+
+export const createClardexClient = (opts: ClardexClientOptions) => {
+  const pool = opts.pool;
+  const network = opts.network;
+  const senderAddress = opts.senderAddress;
+  const decimals = opts.decimals;
+
+  const requireSenderAddress = (value?: string) => {
+    const addr = String(value ?? senderAddress ?? "").trim();
+    if (!addr) {
+      throw new Error(
+        "Missing senderAddress. Pass it to the client or the method call.",
+      );
+    }
+    return addr;
+  };
+
+  return {
+    network,
+    pool,
+    withPool(nextPool: PoolContract) {
+      return createClardexClient({ ...opts, pool: nextPool });
+    },
+    withSender(nextSenderAddress: string) {
+      return createClardexClient({ ...opts, senderAddress: nextSenderAddress });
+    },
+
+    buildSwapCall(params: Omit<SwapParams, "pool"> & { pool?: PoolContract }) {
+      return buildSwapCall({ ...params, pool: params.pool ?? pool });
+    },
+    executeSwap(
+      openContractCall: OpenContractCall,
+      params: Omit<SwapParams, "pool"> & { pool?: PoolContract },
+      options: SwapExecutionOptions,
+    ) {
+      return executeSwap(
+        openContractCall,
+        { ...params, pool: params.pool ?? pool },
+        options,
+      );
+    },
+
+    buildAddLiquidityCall(
+      params: Omit<AddLiquidityParams, "pool"> & { pool?: PoolContract },
+    ) {
+      return buildAddLiquidityCall({ ...params, pool: params.pool ?? pool });
+    },
+    executeAddLiquidity(
+      openContractCall: OpenContractCall,
+      params: Omit<AddLiquidityParams, "pool"> & { pool?: PoolContract },
+      options: SwapExecutionOptions,
+    ) {
+      return executeAddLiquidity(
+        openContractCall,
+        { ...params, pool: params.pool ?? pool },
+        options,
+      );
+    },
+
+    buildRemoveLiquidityCall(
+      params: Omit<RemoveLiquidityParams, "pool"> & { pool?: PoolContract },
+    ) {
+      return buildRemoveLiquidityCall({ ...params, pool: params.pool ?? pool });
+    },
+    executeRemoveLiquidity(
+      openContractCall: OpenContractCall,
+      params: Omit<RemoveLiquidityParams, "pool"> & { pool?: PoolContract },
+      options: SwapExecutionOptions,
+    ) {
+      return executeRemoveLiquidity(
+        openContractCall,
+        { ...params, pool: params.pool ?? pool },
+        options,
+      );
+    },
+
+    fetchPoolState(
+      args: { senderAddress?: string; pool?: PoolContract; decimals?: number } = {},
+    ) {
+      const resolvedSender = requireSenderAddress(args.senderAddress);
+      return fetchPoolState(
+        network,
+        args.pool ?? pool,
+        resolvedSender,
+        args.decimals ?? decimals,
+      );
+    },
+
+    fetchQuoteDetailed(
+      params: Omit<QuoteParams, "pool" | "senderAddress"> & {
+        pool?: PoolContract;
+        senderAddress?: string;
+        slippagePercent?: number;
+        poolState?: PoolState;
+        decimals?: number;
+        decimalsIn?: number;
+        decimalsOut?: number;
+      },
+    ) {
+      const resolvedSender = requireSenderAddress(params.senderAddress);
+      return fetchQuoteDetailed(network, {
+        ...params,
+        pool: params.pool ?? pool,
+        senderAddress: resolvedSender,
+        decimals: params.decimals ?? decimals,
+      });
+    },
+  };
 };
 
 export const isValidStacksAddress = (address: string) =>
