@@ -44,6 +44,7 @@ import {
   getTokenMetadataCacheSize,
   fetchTokenInfo,
   fetchTokenInfos,
+  validatePoolContract,
   normalizePoolReserves,
   normalizePoolState,
   findMinAmountInMicroForExactOut,
@@ -580,6 +581,52 @@ describe("clardex-sdk swap helpers", () => {
     expect(maxInFlight).toBeLessThanOrEqual(2);
     expect(infos).toHaveLength(5);
     expect(infos.every((info) => info.symbol === "T")).toBe(true);
+  });
+
+  it("validates pool contracts", async () => {
+    const required = [
+      "get-reserves",
+      "get-total-supply",
+      "quote-x-for-y",
+      "quote-y-for-x",
+      "swap-x-for-y",
+      "swap-y-for-x",
+      "initialize-pool",
+      "add-liquidity",
+      "remove-liquidity",
+    ];
+
+    const fetcher = async () =>
+      new Response(
+        JSON.stringify({ functions: required.map((name) => ({ name })) }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+
+    const ok = await validatePoolContract("SP000000000000000000002Q6VF78.dex-pool-v5", {
+      apiBaseUrl: "https://example.invalid",
+      fetcher: fetcher as unknown as typeof fetch,
+      retries: 0,
+    });
+    expect(ok.ok).toBe(true);
+
+    const badFetcher = async () =>
+      new Response(JSON.stringify({ functions: [{ name: "get-reserves" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    const bad = await validatePoolContract("SP000000000000000000002Q6VF78.dex-pool-v5", {
+      apiBaseUrl: "https://example.invalid",
+      fetcher: badFetcher as unknown as typeof fetch,
+      retries: 0,
+    });
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) {
+      expect(Array.isArray(bad.missing)).toBe(true);
+      expect(bad.missing?.length).toBeGreaterThan(0);
+    }
   });
 
   it("normalizes pool reserve values", () => {

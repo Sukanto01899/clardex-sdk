@@ -156,6 +156,7 @@ const quote = await client.fetchQuoteDetailed({
 });
 
 // Also available: fetchPoolSnapshot, watchPoolSnapshot, fetchQuoteExactOut
+// Also available: validatePoolContract, validateSip10Token
 ```
 
 ## Token metadata

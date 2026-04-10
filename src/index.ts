@@ -445,6 +445,14 @@ export const createClardexClient = (opts: ClardexClientOptions) => {
     fetchTokenInfos(ids: string[], tokenOpts: FetchTokenInfosOptions = {}) {
       return fetchTokenInfos(ids, tokenOpts);
     },
+
+    validatePoolContract(poolRef: PoolContract | string = pool, validateOpts: TokenMetadataOptions = {}) {
+      return validatePoolContract(poolRef, validateOpts);
+    },
+
+    validateSip10Token(id: string, validateOpts: TokenMetadataOptions = {}) {
+      return validateSip10Token(id, validateOpts);
+    },
   };
 };
 
@@ -992,6 +1000,67 @@ export const validateSip10Token = async (
       return { ok: false, message: "Asset not found in contract." };
     }
   }
+  return { ok: true as const };
+};
+
+export const validatePoolContract = async (
+  pool: PoolContract | string,
+  opts: TokenMetadataOptions = {},
+) => {
+  const principal =
+    typeof pool === "string"
+      ? String(pool || "").trim()
+      : buildContractPrincipal(pool.address, pool.name);
+
+  if (!principal) {
+    return { ok: false, message: "Pool must be address.contract format." };
+  }
+
+  let parts: ContractPrincipalParts;
+  try {
+    parts = parseContractPrincipal(principal);
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Invalid pool identifier.",
+    };
+  }
+
+  const fetcher = getFetch(opts);
+  const res = await fetchWithRetry(
+    fetcher,
+    `${getApiBaseUrl(opts)}/v2/contracts/interface/${parts.address}/${parts.name}`,
+    { headers: { accept: "application/json" } },
+    opts,
+  );
+  if (!res.ok) {
+    return { ok: false, message: "Pool contract interface not found." };
+  }
+
+  const data = (await res.json()) as { functions?: { name?: string }[] };
+  const functions = Array.isArray(data?.functions) ? data.functions : [];
+  const required = [
+    "get-reserves",
+    "get-total-supply",
+    "quote-x-for-y",
+    "quote-y-for-x",
+    "swap-x-for-y",
+    "swap-y-for-x",
+    "initialize-pool",
+    "add-liquidity",
+    "remove-liquidity",
+  ];
+  const missing = required.filter(
+    (fn) => !functions.some((f) => f?.name === fn),
+  );
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      message: `Missing pool functions: ${missing.join(", ")}.`,
+      missing,
+    };
+  }
+
   return { ok: true as const };
 };
 
