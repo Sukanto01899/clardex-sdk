@@ -43,6 +43,7 @@ import {
   getCachedTokenInfo,
   getTokenMetadataCacheSize,
   fetchTokenInfo,
+  fetchTokenInfos,
   normalizePoolReserves,
   normalizePoolState,
   findMinAmountInMicroForExactOut,
@@ -544,6 +545,41 @@ describe("clardex-sdk swap helpers", () => {
     expect(calls).toBe(0);
     expect(info.verified).toBe(false);
     expect(info.error).toContain("Aborted");
+  });
+
+  it("fetches token infos with a concurrency limit", async () => {
+    clearTokenMetadataCache();
+
+    const ids = Array.from({ length: 5 }, (_, idx) => `SP000000000000000000002Q6VF78.token-${idx}::token-${idx}`);
+
+    let calls = 0;
+    let inFlight = 0;
+    let maxInFlight = 0;
+
+    const fetcher = async () => {
+      calls += 1;
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      inFlight -= 1;
+      return new Response(JSON.stringify({ name: "Token", symbol: "T" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    const infos = await fetchTokenInfos(ids, {
+      metadataBaseUrl: "https://example.invalid",
+      fetcher: fetcher as unknown as typeof fetch,
+      cacheTtlMs: 60_000,
+      retries: 0,
+      concurrency: 2,
+    });
+
+    expect(calls).toBe(5);
+    expect(maxInFlight).toBeLessThanOrEqual(2);
+    expect(infos).toHaveLength(5);
+    expect(infos.every((info) => info.symbol === "T")).toBe(true);
   });
 
   it("normalizes pool reserve values", () => {

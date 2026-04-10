@@ -173,6 +173,10 @@ export type TokenMetadataOptions = {
   retryBackoffFactor?: number;
 };
 
+export type FetchTokenInfosOptions = TokenMetadataOptions & {
+  concurrency?: number;
+};
+
 const DEFAULT_DECIMALS = 1_000_000;
 const DEFAULT_TTL = 24 * 60 * 60 * 1000;
 
@@ -370,6 +374,32 @@ export const createClardexClient = (opts: ClardexClientOptions) => {
       );
     },
 
+    fetchPoolSnapshot(
+      args: { senderAddress?: string; pool?: PoolContract; decimals?: number } = {},
+    ) {
+      const resolvedSender = requireSenderAddress(args.senderAddress);
+      return fetchPoolSnapshot(
+        network,
+        args.pool ?? pool,
+        resolvedSender,
+        args.decimals ?? decimals,
+      );
+    },
+
+    watchPoolSnapshot(
+      onSnapshot: (snapshot: PoolSnapshot) => void,
+      watchOpts: WatchPoolOptions & { senderAddress?: string; pool?: PoolContract } = {},
+    ) {
+      const resolvedSender = requireSenderAddress(watchOpts.senderAddress);
+      return watchPoolSnapshot(
+        network,
+        watchOpts.pool ?? pool,
+        resolvedSender,
+        onSnapshot,
+        watchOpts,
+      );
+    },
+
     fetchQuoteDetailed(
       params: Omit<QuoteParams, "pool" | "senderAddress"> & {
         pool?: PoolContract;
@@ -388,6 +418,32 @@ export const createClardexClient = (opts: ClardexClientOptions) => {
         senderAddress: resolvedSender,
         decimals: params.decimals ?? decimals,
       });
+    },
+
+    fetchQuoteExactOut(
+      params: Parameters<typeof fetchQuoteExactOut>[1] & {
+        pool?: PoolContract;
+        senderAddress?: string;
+        decimals?: number;
+        decimalsIn?: number;
+        decimalsOut?: number;
+      },
+    ) {
+      const resolvedSender = requireSenderAddress(params.senderAddress);
+      return fetchQuoteExactOut(network, {
+        ...params,
+        pool: params.pool ?? pool,
+        senderAddress: resolvedSender,
+        decimals: params.decimals ?? decimals,
+      });
+    },
+
+    fetchTokenInfo(id: string, tokenOpts: TokenMetadataOptions = {}) {
+      return fetchTokenInfo(id, tokenOpts);
+    },
+
+    fetchTokenInfos(ids: string[], tokenOpts: FetchTokenInfosOptions = {}) {
+      return fetchTokenInfos(ids, tokenOpts);
     },
   };
 };
@@ -1022,6 +1078,35 @@ export const fetchTokenInfo = async (
   } finally {
     tokenInfoInFlight.delete(cacheKey);
   }
+};
+
+export const fetchTokenInfos = async (
+  ids: string[],
+  opts: FetchTokenInfosOptions = {},
+): Promise<TokenMetadata[]> => {
+  const list = Array.isArray(ids) ? ids : [];
+  if (list.length === 0) return [];
+
+  const concurrency = Math.max(1, Math.floor(opts.concurrency ?? 6));
+  let cursor = 0;
+  const results: TokenMetadata[] = new Array(list.length);
+
+  const worker = async () => {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      if (opts.signal?.aborted) return;
+      const idx = cursor;
+      cursor += 1;
+      if (idx >= list.length) return;
+      results[idx] = await fetchTokenInfo(list[idx] as string, opts);
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, list.length) }, () => worker()),
+  );
+
+  return results;
 };
 
 export const buildSwapCall = (params: SwapParams): ContractCall => {

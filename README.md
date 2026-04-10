@@ -154,14 +154,22 @@ const quote = await client.fetchQuoteDetailed({
   direction: "x-to-y",
   slippagePercent: 0.5,
 });
+
+// Also available: fetchPoolSnapshot, watchPoolSnapshot, fetchQuoteExactOut
 ```
 
 ## Token metadata
 
 ```ts
-import { fetchTokenInfo, validateSip10Token } from "@clardex/clardex-sdk";
+import { fetchTokenInfo, fetchTokenInfos, validateSip10Token } from "@clardex/clardex-sdk";
 
 const info = await fetchTokenInfo("SP...token-x::token-x", { network: "mainnet" });
+
+// Batch helper (respects cache + supports concurrency limit)
+const infos = await fetchTokenInfos(
+  ["SP...token-x::token-x", "SP...token-y::token-y", "STX"],
+  { network: "mainnet", concurrency: 4 },
+);
 const validation = await validateSip10Token("SP...token-x::token-x", {
   network: "mainnet",
 });
