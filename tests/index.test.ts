@@ -18,6 +18,7 @@ import {
   poolFromContractPrincipal,
   createClardexClient,
   estimatePriceImpactPercent,
+  calculatePriceImpactPercent,
   suggestSlippagePercent,
   suggestSplitCount,
   calculateMinOut,
@@ -95,6 +96,12 @@ describe("clardex-sdk builders", () => {
     expect(call.functionName).toBe("swap-x-for-y");
     expect(call.contractAddress).toBe(pool.address);
     expect(call.contractName).toBe(pool.name);
+  });
+
+  it("calculates price impact vs spot using execution price", () => {
+    const impact = calculatePriceImpactPercent(100, 90.9090909, 1000, 1000);
+    expect(impact).toBeGreaterThan(9);
+    expect(impact).toBeLessThan(9.2);
   });
 
   it("builds swap call", () => {

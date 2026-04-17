@@ -481,6 +481,33 @@ export const estimatePriceImpactPercent = (
   return (amount / reserve) * 100;
 };
 
+export const calculatePriceImpactPercent = (
+  amountIn: number,
+  amountOut: number,
+  reserveIn: number,
+  reserveOut: number,
+) => {
+  const input = Number(amountIn);
+  const output = Number(amountOut);
+  const inReserve = Number(reserveIn);
+  const outReserve = Number(reserveOut);
+  if (
+    !Number.isFinite(input) ||
+    !Number.isFinite(output) ||
+    !Number.isFinite(inReserve) ||
+    !Number.isFinite(outReserve)
+  ) {
+    return 0;
+  }
+  if (input <= 0 || output <= 0 || inReserve <= 0 || outReserve <= 0) return 0;
+  const spotPrice = outReserve / inReserve;
+  if (!Number.isFinite(spotPrice) || spotPrice <= 0) return 0;
+  const executionPrice = output / input;
+  if (!Number.isFinite(executionPrice) || executionPrice <= 0) return 0;
+  const impact = ((spotPrice - executionPrice) / spotPrice) * 100;
+  return Number.isFinite(impact) ? Math.max(0, impact) : 0;
+};
+
 export type SlippageSuggestionOptions = {
   fallbackPct?: number;
   basePct?: number;
@@ -1628,9 +1655,18 @@ export const fetchQuoteDetailed = async (
     (await fetchPoolState(network, params.pool, params.senderAddress, DEFAULT_DECIMALS));
   const reserveIn =
     params.direction === "x-to-y" ? state.reserveX : state.reserveY;
+  const reserveOut =
+    params.direction === "x-to-y" ? state.reserveY : state.reserveX;
 
   const priceImpactPercent =
-    senderAmountForEstimate === null ? null : estimatePriceImpactPercent(senderAmountForEstimate, reserveIn);
+    senderAmountForEstimate === null
+      ? null
+      : calculatePriceImpactPercent(
+          senderAmountForEstimate,
+          expectedOut,
+          reserveIn,
+          reserveOut,
+        );
   if (priceImpactPercent === null) {
     warnings.push("Price impact unavailable (amount too large).");
   } else if (priceImpactPercent >= 15) {
