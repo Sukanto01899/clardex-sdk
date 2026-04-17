@@ -280,6 +280,54 @@ export const buildHiroContractUrl = (
   return `https://explorer.hiro.so/contract/${address}/${name}?chain=${network}`;
 };
 
+export type ClardexAppTab = "swap" | "prices" | "pools" | "analytics" | "liquidity";
+
+export type BuildClardexAppUrlParams = {
+  pool?: PoolContract | string | null;
+  tab?: ClardexAppTab | null;
+  dir?: "x-to-y" | "y-to-x" | null;
+  amount?: number | string | null;
+  slippage?: number | string | null;
+  deadline?: number | string | null;
+};
+
+export const buildClardexAppUrl = (
+  baseUrl: string,
+  params: BuildClardexAppUrlParams = {},
+) => {
+  const url = new URL(String(baseUrl || "").trim());
+
+  const tab = params.tab ?? null;
+  if (tab) url.searchParams.set("tab", tab);
+
+  const pool = params.pool ?? null;
+  if (typeof pool === "string" && pool.trim()) {
+    url.searchParams.set("pool", pool.trim());
+  } else if (pool && typeof pool === "object") {
+    url.searchParams.set("pool", buildContractPrincipal(pool.address, pool.name));
+  }
+
+  const dir = params.dir ?? null;
+  if (dir) url.searchParams.set("dir", dir);
+
+  const amount = params.amount ?? null;
+  if (amount !== null && amount !== undefined && String(amount).trim()) {
+    url.searchParams.set("amount", String(amount).trim());
+  }
+
+  const slippage = params.slippage ?? null;
+  if (slippage !== null && slippage !== undefined && String(slippage).trim()) {
+    url.searchParams.set("slippage", String(slippage).trim());
+  }
+
+  const deadline = params.deadline ?? null;
+  if (deadline !== null && deadline !== undefined && String(deadline).trim()) {
+    url.searchParams.set("deadline", String(deadline).trim());
+  }
+
+  return url.toString();
+};
+
 export type ClardexClientOptions = {
   network: StacksNetwork;
   pool: PoolContract;

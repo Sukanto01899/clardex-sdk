@@ -26,6 +26,7 @@ import {
   buildHiroTxUrl,
   buildHiroAddressUrl,
   buildHiroContractUrl,
+  buildClardexAppUrl,
   toMicroAmount,
   fromMicroAmount,
   formatMicroAmount,
@@ -70,6 +71,27 @@ describe("clardex-sdk builders", () => {
   it("creates a Hiro network wrapper", () => {
     const net = createHiroNetwork("testnet");
     expect(net.client.baseUrl).toContain("api.testnet.hiro.so");
+  });
+
+  it("builds Clardex app deep links", () => {
+    const url = buildClardexAppUrl("https://example.com", {
+      pool: "SP000000000000000000002Q6VF78.dex-pool-v5",
+      tab: "swap",
+      dir: "x-to-y",
+      amount: "1.25",
+      slippage: 0.5,
+      deadline: 30,
+    });
+    const parsed = new URL(url);
+    expect(parsed.origin).toBe("https://example.com");
+    expect(parsed.searchParams.get("pool")).toBe(
+      "SP000000000000000000002Q6VF78.dex-pool-v5",
+    );
+    expect(parsed.searchParams.get("tab")).toBe("swap");
+    expect(parsed.searchParams.get("dir")).toBe("x-to-y");
+    expect(parsed.searchParams.get("amount")).toBe("1.25");
+    expect(parsed.searchParams.get("slippage")).toBe("0.5");
+    expect(parsed.searchParams.get("deadline")).toBe("30");
   });
 
   it("creates pool parts from a contract principal", () => {
