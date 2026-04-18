@@ -569,6 +569,13 @@ export const createClardexClient = (opts: ClardexClientOptions) => {
 export const isValidStacksAddress = (address: string) =>
   validateStacksAddress(String(address || "").trim());
 
+export const requireStacksAddress = (address: string) => {
+  const raw = String(address || "").trim();
+  if (!raw) throw new Error("Stacks address is empty.");
+  if (!validateStacksAddress(raw)) throw new Error("Invalid Stacks address.");
+  return raw;
+};
+
 export const nowSeconds = (date: Date = new Date()) =>
   Math.floor(date.getTime() / 1000);
 

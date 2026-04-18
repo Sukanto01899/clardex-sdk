@@ -34,6 +34,7 @@ import {
   buildContractPrincipal,
   isValidContractPrincipal,
   isValidStacksAddress,
+  requireStacksAddress,
   nowSeconds,
   deadlineSecondsFromNow,
   parseTokenIdStrict,
@@ -185,6 +186,16 @@ describe("clardex-sdk builders", () => {
     const impact = calculatePriceImpactPercent(100, 90.9090909, 1000, 1000);
     expect(impact).toBeGreaterThan(9);
     expect(impact).toBeLessThan(9.2);
+  });
+
+  it("normalizes and validates Stacks addresses", () => {
+    expect(requireStacksAddress(" SP000000000000000000002Q6VF78 ")).toBe(
+      "SP000000000000000000002Q6VF78",
+    );
+    expect(() => requireStacksAddress("")).toThrow("Stacks address is empty.");
+    expect(() => requireStacksAddress("not-an-address")).toThrow(
+      "Invalid Stacks address.",
+    );
   });
 
   it("builds swap call", () => {
