@@ -32,6 +32,55 @@ export type TokenRef =
   | { type: "stx" }
   | { type: "sip10"; contract: string; asset?: string };
 
+export type TokenRefString = "STX" | `${string}.${string}` | `${string}.${string}::${string}`;
+
+export const parseTokenRef = (value: TokenRef | string): TokenRef => {
+  if (value && typeof value === "object") {
+    const token = value as Partial<TokenRef> & { contract?: unknown; asset?: unknown };
+    if (token.type === "stx") return { type: "stx" };
+    if (token.type === "sip10") {
+      const contract = String(token.contract ?? "").trim();
+      if (!contract) {
+        throw new Error("Invalid sip10 token ref. Missing contract.");
+      }
+      const { address, name } = parseContractPrincipal(contract);
+      const asset =
+        typeof token.asset === "string" && token.asset.trim()
+          ? token.asset.trim()
+          : undefined;
+      return { type: "sip10", contract: `${address}.${name}`, asset };
+    }
+    throw new Error("Invalid token ref. Expected type 'stx' or 'sip10'.");
+  }
+
+  const raw = String(value || "").trim();
+  if (!raw) throw new Error("Token ref string is empty.");
+  if (raw.toLowerCase() === "stx") return { type: "stx" };
+
+  if (raw.includes("::")) {
+    const { contract, asset } = parseTokenIdStrict(raw);
+    return { type: "sip10", contract, asset };
+  }
+
+  const { address, name } = parseContractPrincipal(raw);
+  return { type: "sip10", contract: `${address}.${name}` };
+};
+
+export const formatTokenRef = (token: TokenRef): TokenRefString => {
+  if (token.type === "stx") return "STX";
+  const contract = toContractIdString(token.contract);
+  const asset = String(token.asset ?? "").trim();
+  if (asset) return `${contract}::${asset}`;
+  return contract;
+};
+
+export const tokenRefToAssetId = (token: TokenRef): "STX" | `${string}.${string}::${string}` => {
+  if (token.type === "stx") return "STX";
+  const contract = toContractIdString(token.contract);
+  const asset = getSip10AssetName({ ...token, contract });
+  return buildTokenId(contract, asset) as `${string}.${string}::${string}`;
+};
+
 export type SwapParams = {
   pool: PoolContract;
   tokenX: TokenRef;
@@ -657,11 +706,8 @@ export const getCachedTokenInfo = (
 
 const tokenToOptionalCv = (token: TokenRef) => {
   if (token.type === "stx") return noneCV();
-  const [address, contractName] = token.contract.split(".");
-  if (!address || !contractName) {
-    throw new Error("Invalid token contract format. Expected address.contract");
-  }
-  return someCV(contractPrincipalCV(address, contractName));
+  const { address, name } = parseContractPrincipal(token.contract);
+  return someCV(contractPrincipalCV(address, name));
 };
 
 export const parseTokenId = (id: string) => {

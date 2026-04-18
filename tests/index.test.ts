@@ -50,6 +50,9 @@ import {
   normalizePoolReserves,
   normalizePoolState,
   findMinAmountInMicroForExactOut,
+  parseTokenRef,
+  formatTokenRef,
+  tokenRefToAssetId,
 } from "../src/index";
 import { cvToValue } from "@stacks/transactions";
 
@@ -118,6 +121,53 @@ describe("clardex-sdk builders", () => {
     expect(call.functionName).toBe("swap-x-for-y");
     expect(call.contractAddress).toBe(pool.address);
     expect(call.contractName).toBe(pool.name);
+  });
+
+  it("parses and formats TokenRef values", () => {
+    expect(parseTokenRef("STX")).toEqual({ type: "stx" });
+    expect(parseTokenRef(" stx ")).toEqual({ type: "stx" });
+
+    expect(parseTokenRef("SP000000000000000000002Q6VF78.token-x")).toEqual({
+      type: "sip10",
+      contract: "SP000000000000000000002Q6VF78.token-x",
+    });
+
+    expect(
+      parseTokenRef("SP000000000000000000002Q6VF78.token-x::token-x"),
+    ).toEqual({
+      type: "sip10",
+      contract: "SP000000000000000000002Q6VF78.token-x",
+      asset: "token-x",
+    });
+
+    expect(
+      formatTokenRef({ type: "sip10", contract: "SP000000000000000000002Q6VF78.token-x" }),
+    ).toBe("SP000000000000000000002Q6VF78.token-x");
+
+    expect(
+      formatTokenRef({
+        type: "sip10",
+        contract: "SP000000000000000000002Q6VF78.token-x",
+        asset: "token-x",
+      }),
+    ).toBe("SP000000000000000000002Q6VF78.token-x::token-x");
+  });
+
+  it("builds a canonical asset id from TokenRef", () => {
+    expect(tokenRefToAssetId({ type: "stx" })).toBe("STX");
+    expect(
+      tokenRefToAssetId({
+        type: "sip10",
+        contract: "SP000000000000000000002Q6VF78.token-x",
+      }),
+    ).toBe("SP000000000000000000002Q6VF78.token-x::token-x");
+    expect(
+      tokenRefToAssetId({
+        type: "sip10",
+        contract: "SP000000000000000000002Q6VF78.token-x",
+        asset: "custom-asset",
+      }),
+    ).toBe("SP000000000000000000002Q6VF78.token-x::custom-asset");
   });
 
   it("calculates price impact vs spot using execution price", () => {
