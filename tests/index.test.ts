@@ -53,6 +53,8 @@ import {
   parseTokenRef,
   formatTokenRef,
   tokenRefToAssetId,
+  tryParseTokenRef,
+  isValidTokenRef,
 } from "../src/index";
 import { cvToValue } from "@stacks/transactions";
 
@@ -168,6 +170,15 @@ describe("clardex-sdk builders", () => {
         asset: "custom-asset",
       }),
     ).toBe("SP000000000000000000002Q6VF78.token-x::custom-asset");
+  });
+
+  it("safely parses TokenRef from unknown inputs", () => {
+    expect(tryParseTokenRef("STX")).toEqual({ type: "stx" });
+    expect(tryParseTokenRef("")).toBeNull();
+    expect(tryParseTokenRef(123)).toBeNull();
+    expect(isValidTokenRef("SP000000000000000000002Q6VF78.token-x")).toBe(true);
+    expect(isValidTokenRef({ type: "sip10", contract: "SP000000000000000000002Q6VF78.token-x" })).toBe(true);
+    expect(isValidTokenRef({ type: "sip10" })).toBe(false);
   });
 
   it("calculates price impact vs spot using execution price", () => {

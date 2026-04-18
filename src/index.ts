@@ -66,6 +66,19 @@ export const parseTokenRef = (value: TokenRef | string): TokenRef => {
   return { type: "sip10", contract: `${address}.${name}` };
 };
 
+export const tryParseTokenRef = (value: unknown): TokenRef | null => {
+  try {
+    if (typeof value === "string") return parseTokenRef(value);
+    if (value && typeof value === "object") return parseTokenRef(value as TokenRef);
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+export const isValidTokenRef = (value: unknown): boolean =>
+  tryParseTokenRef(value) !== null;
+
 export const formatTokenRef = (token: TokenRef): TokenRefString => {
   if (token.type === "stx") return "STX";
   const contract = toContractIdString(token.contract);
