@@ -33,8 +33,10 @@ import {
   parseContractPrincipal,
   buildContractPrincipal,
   isValidContractPrincipal,
+  isValidStacksContractPrincipal,
   isValidStacksAddress,
   requireStacksAddress,
+  requireContractPrincipal,
   nowSeconds,
   deadlineSecondsFromNow,
   parseTokenIdStrict,
@@ -195,6 +197,21 @@ describe("clardex-sdk builders", () => {
     expect(() => requireStacksAddress("")).toThrow("Stacks address is empty.");
     expect(() => requireStacksAddress("not-an-address")).toThrow(
       "Invalid Stacks address.",
+    );
+  });
+
+  it("validates contract principals with real stacks addresses", () => {
+    expect(isValidContractPrincipal("SP000000000000000000002Q6VF78.dex-pool-v5")).toBe(true);
+    expect(isValidStacksContractPrincipal("SP000000000000000000002Q6VF78.dex-pool-v5")).toBe(true);
+    expect(isValidContractPrincipal("not-an-address.dex-pool-v5")).toBe(true);
+    expect(isValidStacksContractPrincipal("not-an-address.dex-pool-v5")).toBe(false);
+
+    expect(requireContractPrincipal(" SP000000000000000000002Q6VF78.dex-pool-v5 ")).toBe(
+      "SP000000000000000000002Q6VF78.dex-pool-v5",
+    );
+    expect(() => requireContractPrincipal("")).toThrow("Contract principal is empty.");
+    expect(() => requireContractPrincipal("not-an-address.dex-pool-v5")).toThrow(
+      "Invalid contract principal address.",
     );
   });
 

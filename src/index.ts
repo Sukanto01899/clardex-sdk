@@ -302,6 +302,27 @@ export const isValidContractPrincipal = (contractPrincipal: string) => {
   }
 };
 
+export const isValidStacksContractPrincipal = (contractPrincipal: string) => {
+  try {
+    const { address, name } = parseContractPrincipal(contractPrincipal);
+    if (!validateStacksAddress(address)) return false;
+    if (!name) return false;
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const requireContractPrincipal = (contractPrincipal: string) => {
+  const raw = String(contractPrincipal || "").trim();
+  if (!raw) throw new Error("Contract principal is empty.");
+  const { address, name } = parseContractPrincipal(raw);
+  if (!validateStacksAddress(address)) {
+    throw new Error("Invalid contract principal address.");
+  }
+  return `${address}.${name}`;
+};
+
 export const buildContractPrincipal = (address: string, name: string) => {
   const addr = String(address || "").trim();
   const contractName = String(name || "").trim();
