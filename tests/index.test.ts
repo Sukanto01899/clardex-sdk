@@ -59,6 +59,7 @@ import {
   tryParseTokenRef,
   isValidTokenRef,
 } from "../src/index";
+import { describe, expect, it } from "vitest";
 import { cvToValue } from "@stacks/transactions";
 
 const unwrapUint = (value: unknown): bigint => {
