@@ -28,6 +28,8 @@ export type PoolContract = {
   name: string;
 };
 
+export type PoolContractString = `${string}.${string}`;
+
 export type TokenRef =
   | { type: "stx" }
   | { type: "sip10"; contract: string; asset?: string };
@@ -273,6 +275,60 @@ export const poolFromContractPrincipal = (contractPrincipal: string): PoolContra
   const { address, name } = parseContractPrincipal(contractPrincipal);
   return { address, name };
 };
+
+export const formatPoolContract = (pool: PoolContract): PoolContractString => {
+  const address = String(pool?.address ?? "").trim();
+  const name = String(pool?.name ?? "").trim();
+  if (!address || !name) {
+    throw new Error("Invalid pool contract. Expected { address, name }.");
+  }
+  if (address.includes(".") || name.includes(".")) {
+    throw new Error("Invalid pool contract parts. Address/name must not include '.'");
+  }
+  if (!validateStacksAddress(address)) {
+    throw new Error("Invalid pool contract address.");
+  }
+  return `${address}.${name}` as PoolContractString;
+};
+
+export const parsePoolContract = (value: PoolContract | string): PoolContract => {
+  if (value && typeof value === "object") {
+    const pool = value as Partial<PoolContract>;
+    const address = String(pool.address ?? "").trim();
+    const name = String(pool.name ?? "").trim();
+    if (!address || !name) {
+      throw new Error("Invalid pool contract. Missing address or name.");
+    }
+    if (address.includes(".") || name.includes(".")) {
+      throw new Error("Invalid pool contract parts. Address/name must not include '.'");
+    }
+    if (!validateStacksAddress(address)) {
+      throw new Error("Invalid pool contract address.");
+    }
+    return { address, name };
+  }
+
+  const raw = String(value || "").trim();
+  if (!raw) throw new Error("Pool contract string is empty.");
+  const { address, name } = parseContractPrincipal(raw);
+  if (!validateStacksAddress(address)) {
+    throw new Error("Invalid pool contract address.");
+  }
+  return { address, name };
+};
+
+export const tryParsePoolContract = (value: unknown): PoolContract | null => {
+  try {
+    if (typeof value === "string") return parsePoolContract(value);
+    if (value && typeof value === "object") return parsePoolContract(value as PoolContract);
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+export const isValidPoolContract = (value: unknown): boolean =>
+  tryParsePoolContract(value) !== null;
 
 export type ContractPrincipalParts = { address: string; name: string };
 

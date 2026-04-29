@@ -58,8 +58,11 @@ import {
   tokenRefToAssetId,
   tryParseTokenRef,
   isValidTokenRef,
+  parsePoolContract,
+  formatPoolContract,
+  tryParsePoolContract,
+  isValidPoolContract,
 } from "../src/index";
-import { describe, expect, it } from "vitest";
 import { cvToValue } from "@stacks/transactions";
 
 const unwrapUint = (value: unknown): bigint => {
@@ -639,6 +642,28 @@ describe("clardex-sdk swap helpers", () => {
     expect(calls).toBe(1);
     expect(a.symbol).toBe("X");
     expect(b.symbol).toBe("X");
+  });
+
+  it("parses and formats PoolContract values", () => {
+    expect(parsePoolContract("SP000000000000000000002Q6VF78.dex-pool-v5")).toEqual({
+      address: "SP000000000000000000002Q6VF78",
+      name: "dex-pool-v5",
+    });
+
+    expect(
+      parsePoolContract({ address: "SP000000000000000000002Q6VF78", name: "dex-pool-v5" }),
+    ).toEqual({
+      address: "SP000000000000000000002Q6VF78",
+      name: "dex-pool-v5",
+    });
+
+    expect(
+      formatPoolContract({ address: "SP000000000000000000002Q6VF78", name: "dex-pool-v5" }),
+    ).toBe("SP000000000000000000002Q6VF78.dex-pool-v5");
+
+    expect(tryParsePoolContract("")).toBeNull();
+    expect(isValidPoolContract("SP000000000000000000002Q6VF78.dex-pool-v5")).toBe(true);
+    expect(isValidPoolContract("not-a-contract")).toBe(false);
   });
 
   it("supports aborting metadata fetches via signal", async () => {
