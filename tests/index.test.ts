@@ -62,6 +62,8 @@ import {
   formatPoolContract,
   tryParsePoolContract,
   isValidPoolContract,
+  requirePoolContract,
+  poolContractToPrincipal,
 } from "../src/index";
 import { cvToValue } from "@stacks/transactions";
 
@@ -664,6 +666,18 @@ describe("clardex-sdk swap helpers", () => {
     expect(tryParsePoolContract("")).toBeNull();
     expect(isValidPoolContract("SP000000000000000000002Q6VF78.dex-pool-v5")).toBe(true);
     expect(isValidPoolContract("not-a-contract")).toBe(false);
+  });
+
+  it("requires and formats PoolContract principals", () => {
+    expect(requirePoolContract("SP000000000000000000002Q6VF78.dex-pool-v5")).toBe(
+      "SP000000000000000000002Q6VF78.dex-pool-v5",
+    );
+
+    expect(
+      poolContractToPrincipal({ address: "SP000000000000000000002Q6VF78", name: "dex-pool-v5" }),
+    ).toBe("SP000000000000000000002Q6VF78.dex-pool-v5");
+
+    expect(() => requirePoolContract("")).toThrow();
   });
 
   it("supports aborting metadata fetches via signal", async () => {

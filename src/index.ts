@@ -330,6 +330,14 @@ export const tryParsePoolContract = (value: unknown): PoolContract | null => {
 export const isValidPoolContract = (value: unknown): boolean =>
   tryParsePoolContract(value) !== null;
 
+export const poolContractToPrincipal = (pool: PoolContract): PoolContractString =>
+  formatPoolContract(pool);
+
+export const requirePoolContract = (value: PoolContract | string): PoolContractString => {
+  const parsed = parsePoolContract(value);
+  return formatPoolContract(parsed);
+};
+
 export type ContractPrincipalParts = { address: string; name: string };
 
 export const parseContractPrincipal = (
