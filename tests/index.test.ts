@@ -30,6 +30,9 @@ import {
   tryBuildHiroTokenContractUrl,
   inferNetworkFromStacksAddress,
   inferNetworkFromContractPrincipal,
+  shortenMiddle,
+  shortenStacksAddress,
+  shortenTxid,
   buildClardexAppUrl,
   toMicroAmount,
   fromMicroAmount,
@@ -553,6 +556,17 @@ describe("clardex-sdk swap helpers", () => {
       inferNetworkFromContractPrincipal("SP000000000000000000002Q6VF78.dex-pool-v5"),
     ).toBe("mainnet");
     expect(inferNetworkFromContractPrincipal("not-a-principal")).toBeNull();
+  });
+
+  it("shortens common identifiers for UI display", () => {
+    expect(shortenMiddle("SP000000000000000000002Q6VF78", { head: 4, tail: 4 })).toBe(
+      "SP00...VF78",
+    );
+    expect(shortenStacksAddress(" SP000000000000000000002Q6VF78 ")).toBe(
+      "SP0000...VF78",
+    );
+    expect(shortenTxid("0xabcdef0123456789")).toBe("0xabcd...456789");
+    expect(shortenMiddle("short", { head: 3, tail: 3 })).toBe("short");
   });
 
   it("converts amounts to and from micro units", () => {

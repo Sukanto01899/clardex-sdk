@@ -469,6 +469,27 @@ export const inferNetworkFromContractPrincipal = (
   }
 };
 
+export const shortenMiddle = (
+  value: string,
+  opts: { head?: number; tail?: number; separator?: string } = {},
+): string => {
+  const raw = String(value ?? "");
+  const head = Math.max(0, Math.floor(opts.head ?? 6));
+  const tail = Math.max(0, Math.floor(opts.tail ?? 4));
+  const separator = typeof opts.separator === "string" ? opts.separator : "...";
+
+  if (!raw) return "";
+  if (head === 0 || tail === 0) return raw;
+  if (raw.length <= head + tail + separator.length) return raw;
+  return `${raw.slice(0, head)}${separator}${raw.slice(-tail)}`;
+};
+
+export const shortenStacksAddress = (address: string, opts?: { head?: number; tail?: number }) =>
+  shortenMiddle(String(address ?? "").trim(), { head: opts?.head ?? 6, tail: opts?.tail ?? 4 });
+
+export const shortenTxid = (txid: string, opts?: { head?: number; tail?: number }) =>
+  shortenMiddle(String(txid ?? "").trim(), { head: opts?.head ?? 6, tail: opts?.tail ?? 6 });
+
 export type ClardexAppTab = "swap" | "prices" | "pools" | "analytics" | "liquidity";
 
 export type BuildClardexAppUrlParams = {
