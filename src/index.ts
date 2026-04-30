@@ -451,6 +451,24 @@ export const tryBuildHiroTokenContractUrl = (
   }
 };
 
+export const inferNetworkFromStacksAddress = (address: string): Network | null => {
+  const raw = String(address || "").trim().toUpperCase();
+  if (raw.startsWith("SP") || raw.startsWith("SM")) return "mainnet";
+  if (raw.startsWith("ST") || raw.startsWith("SN")) return "testnet";
+  return null;
+};
+
+export const inferNetworkFromContractPrincipal = (
+  contractPrincipal: string,
+): Network | null => {
+  try {
+    const { address } = parseContractPrincipal(contractPrincipal);
+    return inferNetworkFromStacksAddress(address);
+  } catch {
+    return null;
+  }
+};
+
 export type ClardexAppTab = "swap" | "prices" | "pools" | "analytics" | "liquidity";
 
 export type BuildClardexAppUrlParams = {

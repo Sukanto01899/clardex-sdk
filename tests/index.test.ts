@@ -28,6 +28,8 @@ import {
   buildHiroContractUrl,
   buildHiroTokenContractUrl,
   tryBuildHiroTokenContractUrl,
+  inferNetworkFromStacksAddress,
+  inferNetworkFromContractPrincipal,
   buildClardexAppUrl,
   toMicroAmount,
   fromMicroAmount,
@@ -538,6 +540,19 @@ describe("clardex-sdk swap helpers", () => {
     expect(buildHiroTokenContractUrl("STX", "testnet")).toBeNull();
     expect(tryBuildHiroTokenContractUrl(null)).toBeNull();
     expect(tryBuildHiroTokenContractUrl("not-a-token")).toBeNull();
+  });
+
+  it("infers network from Stacks addresses and contract principals", () => {
+    expect(inferNetworkFromStacksAddress("SP123")).toBe("mainnet");
+    expect(inferNetworkFromStacksAddress("sm123")).toBe("mainnet");
+    expect(inferNetworkFromStacksAddress("ST123")).toBe("testnet");
+    expect(inferNetworkFromStacksAddress("sn123")).toBe("testnet");
+    expect(inferNetworkFromStacksAddress("")).toBeNull();
+
+    expect(
+      inferNetworkFromContractPrincipal("SP000000000000000000002Q6VF78.dex-pool-v5"),
+    ).toBe("mainnet");
+    expect(inferNetworkFromContractPrincipal("not-a-principal")).toBeNull();
   });
 
   it("converts amounts to and from micro units", () => {
