@@ -26,6 +26,8 @@ import {
   buildHiroTxUrl,
   buildHiroAddressUrl,
   buildHiroContractUrl,
+  buildHiroTokenContractUrl,
+  tryBuildHiroTokenContractUrl,
   buildClardexAppUrl,
   toMicroAmount,
   fromMicroAmount,
@@ -512,6 +514,30 @@ describe("clardex-sdk swap helpers", () => {
     ).toBe(
       "https://explorer.hiro.so/contract/SP000000000000000000002Q6VF78/dex-pool-v5?chain=mainnet",
     );
+  });
+
+  it("builds Hiro token contract links from TokenRef", () => {
+    expect(
+      buildHiroTokenContractUrl(
+        "SP000000000000000000002Q6VF78.token-x::token-x",
+        "testnet",
+      ),
+    ).toBe(
+      "https://explorer.hiro.so/contract/SP000000000000000000002Q6VF78/token-x?chain=testnet",
+    );
+
+    expect(
+      buildHiroTokenContractUrl(
+        { type: "sip10", contract: "SP000000000000000000002Q6VF78.token-x" },
+        "mainnet",
+      ),
+    ).toBe(
+      "https://explorer.hiro.so/contract/SP000000000000000000002Q6VF78/token-x?chain=mainnet",
+    );
+
+    expect(buildHiroTokenContractUrl("STX", "testnet")).toBeNull();
+    expect(tryBuildHiroTokenContractUrl(null)).toBeNull();
+    expect(tryBuildHiroTokenContractUrl("not-a-token")).toBeNull();
   });
 
   it("converts amounts to and from micro units", () => {

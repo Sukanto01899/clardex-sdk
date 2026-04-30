@@ -427,6 +427,30 @@ export const buildHiroContractUrl = (
   return `https://explorer.hiro.so/contract/${address}/${name}?chain=${network}`;
 };
 
+export const buildHiroTokenContractUrl = (
+  token: TokenRef | string,
+  network: Network = "mainnet",
+): string | null => {
+  const ref = parseTokenRef(token);
+  if (ref.type === "stx") return null;
+  return buildHiroContractUrl(ref.contract, network);
+};
+
+export const tryBuildHiroTokenContractUrl = (
+  token: unknown,
+  network: Network = "mainnet",
+): string | null => {
+  try {
+    if (typeof token === "string") return buildHiroTokenContractUrl(token, network);
+    if (token && typeof token === "object") {
+      return buildHiroTokenContractUrl(token as TokenRef, network);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 export type ClardexAppTab = "swap" | "prices" | "pools" | "analytics" | "liquidity";
 
 export type BuildClardexAppUrlParams = {
