@@ -1366,6 +1366,35 @@ export const validatePoolContract = async (
   return { ok: true as const };
 };
 
+export const validatePoolContractString = async (
+  contractPrincipal: string,
+  opts: TokenMetadataOptions = {},
+) => {
+  const principal = String(contractPrincipal ?? "").trim();
+  if (!principal) {
+    return { ok: false, message: "Pool contract is required." };
+  }
+
+  let parts: ContractPrincipalParts;
+  try {
+    parts = parseContractPrincipal(principal);
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Invalid pool contract identifier.",
+    };
+  }
+
+  if (!validateStacksAddress(parts.address)) {
+    return { ok: false, message: "Invalid pool contract address." };
+  }
+  if (!parts.name) {
+    return { ok: false, message: "Missing pool contract name." };
+  }
+
+  return validatePoolContract(principal, opts);
+};
+
 export const fetchTokenInfo = async (
   id: string,
   opts: TokenMetadataOptions = {},
