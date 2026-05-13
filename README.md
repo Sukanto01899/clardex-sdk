@@ -132,14 +132,26 @@ const detailed = await fetchQuoteDetailed(network, {
 const state = await fetchPoolState(network, pool, sender);
 ```
 
+## Create a network client
+
+If you just want a ready-to-use `StacksNetwork` configured for the Hiro API, use `createClient`.
+
+```ts
+import { createClient } from "@clardex/clardex-sdk";
+
+const network = createClient({ network: "testnet" });
+// optional override:
+// const network = createClient({ network: "testnet", apiUrl: "https://api.testnet.hiro.so" });
+```
+
 ## Convenience client + network
 
 If you prefer not to pass `network`, `pool`, and `senderAddress` into every call, you can use the lightweight client wrapper.
 
 ```ts
-import { createClardexClient, createHiroNetwork, poolFromContractPrincipal } from "@clardex/clardex-sdk";
+import { createClardexClient, createClient, poolFromContractPrincipal } from "@clardex/clardex-sdk";
 
-const network = createHiroNetwork("testnet");
+const network = createClient({ network: "testnet" });
 const pool = poolFromContractPrincipal("SP...dex-pool-v5");
 
 const client = createClardexClient({

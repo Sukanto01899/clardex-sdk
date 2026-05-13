@@ -15,6 +15,7 @@ import {
   getMetadataBaseUrl,
   getApiBaseUrl,
   createHiroNetwork,
+  createClient,
   poolFromContractPrincipal,
   createClardexClient,
   estimatePriceImpactPercent,
@@ -92,6 +93,16 @@ describe("clardex-sdk builders", () => {
   it("creates a Hiro network wrapper", () => {
     const net = createHiroNetwork("testnet");
     expect(net.client.baseUrl).toContain("api.testnet.hiro.so");
+  });
+
+  it("creates a client network wrapper", () => {
+    const net = createClient({ network: "testnet" });
+    expect(net.client.baseUrl).toContain("api.testnet.hiro.so");
+  });
+
+  it("supports apiUrl override in createClient", () => {
+    const net = createClient({ network: "mainnet", apiUrl: "https://example.com" });
+    expect(net.client.baseUrl).toBe("https://example.com");
   });
 
   it("builds Clardex app deep links", () => {

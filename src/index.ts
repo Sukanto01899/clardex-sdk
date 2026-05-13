@@ -271,6 +271,19 @@ export const createHiroNetwork = (
   });
 };
 
+export type CreateClientOptions = {
+  network: Network;
+  apiUrl?: string;
+};
+
+// Alias helper: creates a `StacksNetwork` configured for Hiro API by network.
+export const createClient = (
+  opts: CreateClientOptions | Network = "mainnet",
+): StacksNetwork => {
+  if (typeof opts === "string") return createHiroNetwork(opts);
+  return createHiroNetwork({ network: opts.network, apiBaseUrl: opts.apiUrl });
+};
+
 export const poolFromContractPrincipal = (contractPrincipal: string): PoolContract => {
   const { address, name } = parseContractPrincipal(contractPrincipal);
   return { address, name };
