@@ -724,6 +724,22 @@ export const createClardexClient = (opts: ClardexClientOptions) => {
     validateSip10Token(id: string, validateOpts: TokenMetadataOptions = {}) {
       return validateSip10Token(id, validateOpts);
     },
+
+    fetchTransactionStatus(txid: string, txOpts: Pick<WatchTransactionOptions, "apiBaseUrl"> = {}) {
+      const baseUrl =
+        txOpts.apiBaseUrl ??
+        (network as unknown as { client?: { baseUrl?: string } }).client?.baseUrl;
+      const networkName: Network = baseUrl?.includes("testnet") ? "testnet" : "mainnet";
+      return fetchTransactionStatus(txid, networkName, baseUrl ?? undefined);
+    },
+
+    watchTransaction(txid: string, watchOpts: WatchTransactionOptions = {}) {
+      const baseUrl =
+        watchOpts.apiBaseUrl ??
+        (network as unknown as { client?: { baseUrl?: string } }).client?.baseUrl;
+      const networkName: Network = baseUrl?.includes("testnet") ? "testnet" : "mainnet";
+      return watchTransaction(txid, networkName, { ...watchOpts, apiBaseUrl: baseUrl ?? undefined });
+    },
   };
 };
 
@@ -2179,4 +2195,165 @@ export const fetchPoolState = async (
     reserveY: snapshot.reserveY,
     totalShares: snapshot.totalShares,
   };
+};
+
+// ---------------------------------------------------------------------------
+// Transaction status
+// ---------------------------------------------------------------------------
+
+export type TransactionStatus =
+  | "pending"
+  | "success"
+  | "abort_by_response"
+  | "abort_by_post_condition"
+  | "not_found";
+
+export type TransactionResult = {
+  txid: string;
+  status: TransactionStatus;
+  /** Block height once confirmed, undefined while pending. */
+  blockHeight?: number;
+  /** Clarity result repr string, e.g. "(ok true)" or "(err u104)". */
+  resultRepr?: string;
+};
+
+export type WatchTransactionOptions = {
+  /** How often to poll. Default 4 000 ms. */
+  intervalMs?: number;
+  /** Give up after this many ms and reject. Default 300 000 ms (5 min). */
+  timeoutMs?: number;
+  /** Called on every poll with the current result while still pending. */
+  onStatus?: (result: TransactionResult) => void;
+  /** Override the Hiro API base URL (useful for custom nodes). */
+  apiBaseUrl?: string;
+  signal?: AbortSignal;
+};
+
+const TERMINAL_TX_STATUSES: TransactionStatus[] = [
+  "success",
+  "abort_by_response",
+  "abort_by_post_condition",
+];
+
+/**
+ * Fetches the current on-chain status of a transaction from the Hiro API.
+ * Returns `"not_found"` when the txid is unknown (not yet in mempool).
+ */
+export const fetchTransactionStatus = async (
+  txid: string,
+  networkName: Network,
+  apiBaseUrl?: string,
+): Promise<TransactionResult> => {
+  const base = apiBaseUrl ?? API_BY_NETWORK[networkName];
+  const url = `${base}/extended/v1/tx/${encodeURIComponent(txid)}`;
+  const res = await fetch(url, { headers: { Accept: "application/json" } });
+
+  if (res.status === 404) {
+    return { txid, status: "not_found" };
+  }
+
+  if (!res.ok) {
+    throw new Error(`Hiro API error ${res.status} fetching tx ${txid}`);
+  }
+
+  const data = (await res.json()) as {
+    tx_status?: string;
+    block_height?: number;
+    tx_result?: { repr?: string };
+  };
+
+  const raw = String(data.tx_status ?? "").trim();
+  const status: TransactionStatus =
+    raw === "success" ||
+    raw === "abort_by_response" ||
+    raw === "abort_by_post_condition"
+      ? raw
+      : raw === "pending"
+        ? "pending"
+        : "not_found";
+
+  return {
+    txid,
+    status,
+    blockHeight: typeof data.block_height === "number" ? data.block_height : undefined,
+    resultRepr: data.tx_result?.repr,
+  };
+};
+
+/**
+ * Polls a transaction until it reaches a terminal state (success or abort),
+ * then resolves with the final {@link TransactionResult}.
+ *
+ * Rejects when `timeoutMs` elapses or the `signal` is aborted.
+ *
+ * @example
+ * const result = await watchTransaction(txid, "mainnet", {
+ *   onStatus: (r) => console.log(r.status),
+ * });
+ * if (result.status === "success") { ... }
+ */
+export const watchTransaction = (
+  txid: string,
+  networkName: Network,
+  opts: WatchTransactionOptions = {},
+): Promise<TransactionResult> => {
+  const intervalMs = Math.max(500, Math.floor(opts.intervalMs ?? 4_000));
+  const timeoutMs = Math.max(1_000, Math.floor(opts.timeoutMs ?? 300_000));
+  const apiBaseUrl = opts.apiBaseUrl;
+
+  return new Promise((resolve, reject) => {
+    let stopped = false;
+    let inFlight = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let pollId: ReturnType<typeof setTimeout> | null = null;
+
+    const stop = (err?: unknown) => {
+      if (stopped) return;
+      stopped = true;
+      if (pollId) clearTimeout(pollId);
+      if (timeoutId) clearTimeout(timeoutId);
+      if (err !== undefined) reject(err);
+    };
+
+    const tick = async () => {
+      if (stopped || inFlight) return;
+      inFlight = true;
+      try {
+        const result = await fetchTransactionStatus(txid, networkName, apiBaseUrl);
+        if (stopped) return;
+        opts.onStatus?.(result);
+        if (TERMINAL_TX_STATUSES.includes(result.status)) {
+          stop();
+          resolve(result);
+          return;
+        }
+      } catch (err) {
+        if (!stopped) opts.onStatus?.({ txid, status: "not_found" });
+      } finally {
+        inFlight = false;
+        if (!stopped) {
+          pollId = setTimeout(() => void tick(), intervalMs);
+        }
+      }
+    };
+
+    timeoutId = setTimeout(
+      () => stop(new Error(`watchTransaction timed out after ${timeoutMs}ms for ${txid}`)),
+      timeoutMs,
+    );
+
+    if (opts.signal) {
+      if (opts.signal.aborted) {
+        stop(new Error("watchTransaction aborted"));
+        return;
+      }
+      opts.signal.addEventListener(
+        "abort",
+        () => stop(new Error("watchTransaction aborted")),
+        { once: true },
+      );
+    }
+
+    void tick();
+  });
 };
