@@ -784,6 +784,14 @@ export const createClardexClient = (opts: ClardexClientOptions) => {
         decimals: params.decimals ?? decimals,
       });
     },
+
+    formatAmount(value: number, formatOpts?: FormatAmountOptions) {
+      return formatAmount(value, formatOpts);
+    },
+
+    parseAmount(raw: unknown) {
+      return parseAmount(raw);
+    },
   };
 };
 
@@ -2658,4 +2666,163 @@ export const fetchBestQuote = async (
 ): Promise<PoolQuoteResult | null> => {
   const all = await fetchAllPoolQuotes(network, pools, params);
   return all.length > 0 ? all[0] : null;
+};
+
+// ---------------------------------------------------------------------------
+// Display formatting & input parsing
+// ---------------------------------------------------------------------------
+
+export type FormatAmountOptions = {
+  /**
+   * Maximum number of decimal places shown. Default `6`.
+   * Trailing zeros are always trimmed.
+   */
+  maxDecimals?: number;
+  /**
+   * Minimum number of significant digits kept when the value is very small.
+   * E.g. `0.000001234` with `minSignificant: 3` → `"0.00000123"`.
+   * Default `2`.
+   */
+  minSignificant?: number;
+  /**
+   * When `true`, values ≥ 1 000 are formatted with K / M / B / T suffixes.
+   * E.g. `1_234_567` → `"1.23M"`. Default `false`.
+   */
+  compact?: boolean;
+  /**
+   * Show a `"<"` prefix when the non-zero value rounds to zero under
+   * `maxDecimals`. E.g. `0.0000001` with `maxDecimals: 6` → `"<0.000001"`.
+   * Default `true`.
+   */
+  ltPrefix?: boolean;
+  /** BCP 47 locale used for `Intl.NumberFormat`. Default `"en-US"`. */
+  locale?: string;
+};
+
+/**
+ * Formats a token amount for display, with smart decimal trimming and
+ * optional compact (K/M/B/T) notation.
+ *
+ * @example
+ * formatAmount(1_234_567.89)          // "1,234,567.89"
+ * formatAmount(0.000001234)           // "0.00000123"
+ * formatAmount(0.0000001)             // "<0.000001"
+ * formatAmount(1_234_567, { compact: true })  // "1.23M"
+ * formatAmount(0)                     // "0"
+ * formatAmount(NaN)                   // "—"
+ */
+export const formatAmount = (
+  value: number,
+  opts: FormatAmountOptions = {},
+): string => {
+  const maxDecimals = opts.maxDecimals ?? 6;
+  const minSignificant = opts.minSignificant ?? 2;
+  const compact = opts.compact ?? false;
+  const ltPrefix = opts.ltPrefix ?? true;
+  const locale = opts.locale ?? "en-US";
+
+  if (!Number.isFinite(value)) return "—";
+  if (value === 0) return "0";
+
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+
+  // Compact notation for large numbers
+  if (compact && abs >= 1_000) {
+    const tiers: [number, string][] = [
+      [1e12, "T"],
+      [1e9, "B"],
+      [1e6, "M"],
+      [1e3, "K"],
+    ];
+    for (const [threshold, suffix] of tiers) {
+      if (abs >= threshold) {
+        const compact = abs / threshold;
+        const formatted = new Intl.NumberFormat(locale, {
+          maximumFractionDigits: 2,
+          minimumFractionDigits: 0,
+        }).format(compact);
+        return `${sign}${formatted}${suffix}`;
+      }
+    }
+  }
+
+  // For values >= 1, use standard locale formatting
+  if (abs >= 1) {
+    const formatted = new Intl.NumberFormat(locale, {
+      maximumFractionDigits: maxDecimals,
+      minimumFractionDigits: 0,
+    }).format(value);
+    return formatted;
+  }
+
+  // For small values, show enough significant digits
+  const str = abs.toFixed(20);
+  const dotIndex = str.indexOf(".");
+  const decimals = dotIndex === -1 ? "" : str.slice(dotIndex + 1);
+
+  // Count leading zeros after decimal point
+  let leadingZeros = 0;
+  for (const ch of decimals) {
+    if (ch === "0") leadingZeros++;
+    else break;
+  }
+
+  // Total decimal places needed: leading zeros + minSignificant digits
+  const targetDecimals = Math.min(leadingZeros + minSignificant, 18);
+  const rounded = Number(abs.toFixed(Math.max(targetDecimals, maxDecimals)));
+
+  // If rounded to zero but original wasn't, show "<" prefix
+  if (rounded === 0) {
+    if (ltPrefix) {
+      const smallest = Number(`1e-${maxDecimals}`);
+      return `${sign}<${new Intl.NumberFormat(locale, {
+        maximumFractionDigits: maxDecimals,
+        minimumFractionDigits: maxDecimals,
+      }).format(smallest)}`;
+    }
+    return `${sign}0`;
+  }
+
+  return (
+    sign +
+    new Intl.NumberFormat(locale, {
+      maximumFractionDigits: Math.max(targetDecimals, maxDecimals),
+      minimumFractionDigits: 0,
+    }).format(rounded)
+  );
+};
+
+/**
+ * Safely parses a user-typed amount string into a number.
+ *
+ * Strips thousands separators (`,`), currency symbols, and surrounding
+ * whitespace. Returns `null` for empty, non-numeric, or non-finite input.
+ *
+ * @example
+ * parseAmount("1,234.56")   // 1234.56
+ * parseAmount("  0.5  ")    // 0.5
+ * parseAmount("$1,000")     // 1000
+ * parseAmount("")            // null
+ * parseAmount("abc")         // null
+ * parseAmount("-3.14")       // -3.14
+ */
+export const parseAmount = (raw: unknown): number | null => {
+  if (raw === null || raw === undefined) return null;
+
+  const str = String(raw)
+    .trim()
+    // Strip common currency/whitespace characters but keep digits, dots, dashes
+    .replace(/[$€£¥₿\s_]/g, "")
+    // Strip thousands separators: commas between digit groups
+    .replace(/,(?=\d{3}(\D|$))/g, "")
+    // Final fallback: strip any remaining commas
+    .replace(/,/g, "");
+
+  if (!str) return null;
+
+  const n = Number(str);
+  if (!Number.isFinite(n)) return null;
+
+  return n;
 };
