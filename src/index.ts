@@ -760,6 +760,30 @@ export const createClardexClient = (opts: ClardexClientOptions) => {
     estimateFeeEarnings(params: FeeEarningsParams) {
       return estimateFeeEarnings(params);
     },
+
+    fetchAllPoolQuotes(
+      pools: PoolContract[],
+      params: Omit<MultiPoolQuoteParams, "senderAddress"> & { senderAddress?: string },
+    ) {
+      const resolvedSender = requireSenderAddress(params.senderAddress);
+      return fetchAllPoolQuotes(network, pools, {
+        ...params,
+        senderAddress: resolvedSender,
+        decimals: params.decimals ?? decimals,
+      });
+    },
+
+    fetchBestQuote(
+      pools: PoolContract[],
+      params: Omit<MultiPoolQuoteParams, "senderAddress"> & { senderAddress?: string },
+    ) {
+      const resolvedSender = requireSenderAddress(params.senderAddress);
+      return fetchBestQuote(network, pools, {
+        ...params,
+        senderAddress: resolvedSender,
+        decimals: params.decimals ?? decimals,
+      });
+    },
   };
 };
 
@@ -2558,4 +2582,80 @@ export const estimateFeeEarnings = (params: FeeEarningsParams): FeeEarningsResul
   }
 
   return { earnedX, earnedY, apr };
+};
+
+// ---------------------------------------------------------------------------
+// Multi-pool quote comparison
+// ---------------------------------------------------------------------------
+
+export type PoolQuoteResult = {
+  pool: PoolContract;
+  quote: QuoteDetailedResult;
+};
+
+export type MultiPoolQuoteParams = Omit<QuoteParams, "pool"> & {
+  slippagePercent?: number;
+  decimals?: number;
+  decimalsIn?: number;
+  decimalsOut?: number;
+};
+
+/**
+ * Fetches quotes from every pool in `pools` in parallel and returns them
+ * sorted by `expectedOut` descending (best price first).
+ *
+ * Pools that fail (no liquidity, network error, etc.) are silently skipped
+ * so a single bad pool never breaks the comparison.
+ *
+ * @example
+ * const quotes = await fetchAllPoolQuotes(network, [poolA, poolB, poolC], {
+ *   amountIn: 100,
+ *   direction: "x-to-y",
+ *   senderAddress: "SP...",
+ * });
+ * // quotes[0] has the best price
+ */
+export const fetchAllPoolQuotes = async (
+  network: StacksNetwork,
+  pools: PoolContract[],
+  params: MultiPoolQuoteParams,
+): Promise<PoolQuoteResult[]> => {
+  if (!pools.length) return [];
+
+  const settled = await Promise.allSettled(
+    pools.map((pool) => fetchQuoteDetailed(network, { ...params, pool })),
+  );
+
+  const results: PoolQuoteResult[] = [];
+  for (let i = 0; i < settled.length; i++) {
+    const r = settled[i];
+    if (r.status === "fulfilled") {
+      results.push({ pool: pools[i], quote: r.value });
+    }
+  }
+
+  return results.sort((a, b) => b.quote.expectedOut - a.quote.expectedOut);
+};
+
+/**
+ * Fetches quotes from every pool in `pools` in parallel and returns the one
+ * with the highest `expectedOut`. Returns `null` when all pools fail.
+ *
+ * @example
+ * const best = await fetchBestQuote(network, [poolA, poolB], {
+ *   amountIn: 100,
+ *   direction: "x-to-y",
+ *   senderAddress: "SP...",
+ * });
+ * if (best) {
+ *   console.log(best.pool, best.quote.expectedOut);
+ * }
+ */
+export const fetchBestQuote = async (
+  network: StacksNetwork,
+  pools: PoolContract[],
+  params: MultiPoolQuoteParams,
+): Promise<PoolQuoteResult | null> => {
+  const all = await fetchAllPoolQuotes(network, pools, params);
+  return all.length > 0 ? all[0] : null;
 };
