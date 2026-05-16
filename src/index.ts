@@ -740,6 +740,26 @@ export const createClardexClient = (opts: ClardexClientOptions) => {
       const networkName: Network = baseUrl?.includes("testnet") ? "testnet" : "mainnet";
       return watchTransaction(txid, networkName, { ...watchOpts, apiBaseUrl: baseUrl ?? undefined });
     },
+
+    calculateImpermanentLoss(
+      entryPrice: number,
+      currentPrice: number,
+    ) {
+      return calculateImpermanentLoss(entryPrice, currentPrice);
+    },
+
+    calculatePositionValue(
+      lpShares: number,
+      totalShares: number,
+      reserveX: number,
+      reserveY: number,
+    ) {
+      return calculatePositionValue(lpShares, totalShares, reserveX, reserveY);
+    },
+
+    estimateFeeEarnings(params: FeeEarningsParams) {
+      return estimateFeeEarnings(params);
+    },
   };
 };
 
@@ -2356,4 +2376,186 @@ export const watchTransaction = (
 
     void tick();
   });
+};
+
+// ---------------------------------------------------------------------------
+// LP math utilities
+// ---------------------------------------------------------------------------
+
+export type ImpermanentLossResult = {
+  /** IL as a negative percentage, e.g. -5.72 means the LP lost 5.72% vs holding. */
+  lossPercent: number;
+  /** Value multiplier of the LP position relative to hold, e.g. 0.9428. */
+  holdValueMultiplier: number;
+};
+
+/**
+ * Calculates impermanent loss given the price ratio at entry vs now.
+ *
+ * Both prices should be expressed as `tokenY per tokenX`
+ * (e.g. if 1 X = 2 Y at entry and now 1 X = 4 Y, pass `entryPrice=2, currentPrice=4`).
+ *
+ * @example
+ * const { lossPercent } = calculateImpermanentLoss(100, 400);
+ * // lossPercent ≈ -20  (price 4×'d → ~20% IL)
+ */
+export const calculateImpermanentLoss = (
+  entryPrice: number,
+  currentPrice: number,
+): ImpermanentLossResult => {
+  const p0 = Number(entryPrice);
+  const p1 = Number(currentPrice);
+
+  if (!Number.isFinite(p0) || !Number.isFinite(p1) || p0 <= 0 || p1 <= 0) {
+    return { lossPercent: 0, holdValueMultiplier: 1 };
+  }
+
+  // k = price ratio (how many times the price moved)
+  const k = p1 / p0;
+  // AMM value relative to holding: 2√k / (1 + k)
+  const holdValueMultiplier = (2 * Math.sqrt(k)) / (1 + k);
+  const lossPercent = (holdValueMultiplier - 1) * 100;
+
+  return {
+    lossPercent: Number(lossPercent.toFixed(6)),
+    holdValueMultiplier: Number(holdValueMultiplier.toFixed(8)),
+  };
+};
+
+export type PositionValueResult = {
+  /** Amount of token X the LP shares represent. */
+  tokenX: number;
+  /** Amount of token Y the LP shares represent. */
+  tokenY: number;
+  /** Fraction of the pool owned, 0–1. */
+  poolShare: number;
+};
+
+/**
+ * Calculates how much token X and token Y a given amount of LP shares
+ * can be redeemed for at the current pool reserves.
+ *
+ * All values should be in the same unit (either all human-readable or all micro).
+ *
+ * @example
+ * const { tokenX, tokenY } = calculatePositionValue(500, 10_000, 80_000, 120_000);
+ */
+export const calculatePositionValue = (
+  lpShares: number,
+  totalShares: number,
+  reserveX: number,
+  reserveY: number,
+): PositionValueResult => {
+  const shares = Number(lpShares);
+  const total = Number(totalShares);
+  const rx = Number(reserveX);
+  const ry = Number(reserveY);
+
+  if (
+    !Number.isFinite(shares) ||
+    !Number.isFinite(total) ||
+    !Number.isFinite(rx) ||
+    !Number.isFinite(ry) ||
+    total <= 0 ||
+    shares < 0
+  ) {
+    return { tokenX: 0, tokenY: 0, poolShare: 0 };
+  }
+
+  const poolShare = Math.min(1, shares / total);
+  return {
+    tokenX: rx * poolShare,
+    tokenY: ry * poolShare,
+    poolShare,
+  };
+};
+
+export type FeeEarningsParams = {
+  lpShares: number;
+  totalShares: number;
+  /** Total swap volume in token X over the period. */
+  volumeX: number;
+  /** Total swap volume in token Y over the period. */
+  volumeY: number;
+  /** Pool fee in basis points, e.g. 30 for 0.30%. */
+  feeBps: number;
+  /**
+   * Duration the volume covers, in hours. Used for APR projection.
+   * Pass `24` when `volumeX/volumeY` are 24h figures.
+   */
+  periodHours?: number;
+};
+
+export type FeeEarningsResult = {
+  /** User's share of fees earned in token X over the period. */
+  earnedX: number;
+  /** User's share of fees earned in token Y over the period. */
+  earnedY: number;
+  /**
+   * Annualised percentage return on the position value, expressed as a
+   * percentage (e.g. 12.5 = 12.5% APR). `null` when position value is zero
+   * or `periodHours` was not provided.
+   */
+  apr: number | null;
+};
+
+/**
+ * Estimates the fee earnings for an LP position over a given volume period.
+ *
+ * @example
+ * const { earnedX, earnedY, apr } = estimateFeeEarnings({
+ *   lpShares: 1_000,
+ *   totalShares: 50_000,
+ *   volumeX: 200_000,
+ *   volumeY: 180_000,
+ *   feeBps: 30,
+ *   periodHours: 24,
+ * });
+ */
+export const estimateFeeEarnings = (params: FeeEarningsParams): FeeEarningsResult => {
+  const {
+    lpShares,
+    totalShares,
+    volumeX,
+    volumeY,
+    feeBps,
+    periodHours,
+  } = params;
+
+  const shares = Number(lpShares);
+  const total = Number(totalShares);
+  const vx = Number(volumeX);
+  const vy = Number(volumeY);
+  const fee = Number(feeBps);
+
+  if (
+    !Number.isFinite(shares) ||
+    !Number.isFinite(total) ||
+    !Number.isFinite(vx) ||
+    !Number.isFinite(vy) ||
+    !Number.isFinite(fee) ||
+    total <= 0 ||
+    shares < 0 ||
+    fee < 0
+  ) {
+    return { earnedX: 0, earnedY: 0, apr: null };
+  }
+
+  const poolShare = Math.min(1, shares / total);
+  const feeRate = fee / 10_000;
+  const earnedX = vx * feeRate * poolShare;
+  const earnedY = vy * feeRate * poolShare;
+
+  let apr: number | null = null;
+  if (periodHours && periodHours > 0 && Number.isFinite(periodHours)) {
+    // Total fees earned in X-equivalent (use X side as proxy)
+    const totalFeeX = (vx + vy) * feeRate * poolShare;
+    // Annualise: fees per hour → per year
+    const annualFeeX = totalFeeX * (8_760 / periodHours);
+    // Position value in X-equivalent (rough: earnedX proxy of pool value share)
+    const positionValueX = vx > 0 ? (shares / total) * vx : 0;
+    apr = positionValueX > 0 ? (annualFeeX / positionValueX) * 100 : null;
+  }
+
+  return { earnedX, earnedY, apr };
 };
