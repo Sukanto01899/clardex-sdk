@@ -792,6 +792,14 @@ export const createClardexClient = (opts: ClardexClientOptions) => {
     parseAmount(raw: unknown) {
       return parseAmount(raw);
     },
+
+    estimateSwapOut(params: EstimateSwapOutParams) {
+      return estimateSwapOut(params);
+    },
+
+    estimateSpotPrice(reserveIn: number, reserveOut: number) {
+      return estimateSpotPrice(reserveIn, reserveOut);
+    },
   };
 };
 
@@ -2825,4 +2833,125 @@ export const parseAmount = (raw: unknown): number | null => {
   if (!Number.isFinite(n)) return null;
 
   return n;
+};
+
+// ---------------------------------------------------------------------------
+// Local AMM math (no network required)
+// ---------------------------------------------------------------------------
+
+export type EstimateSwapOutParams = {
+  /** Amount of the input token (human-readable, not micro). */
+  amountIn: number;
+  /** Current reserve of the input token. */
+  reserveIn: number;
+  /** Current reserve of the output token. */
+  reserveOut: number;
+  /** Pool fee in basis points, e.g. `30` for 0.30%. */
+  feeBps: number;
+};
+
+export type EstimateSwapOutResult = {
+  /** Expected output amount (human-readable). */
+  amountOut: number;
+  /** Fee charged in terms of the input token. */
+  fee: number;
+  /** Price impact as a positive percentage, e.g. `2.5` means 2.5%. */
+  priceImpactPercent: number;
+  /** Spot price before the swap: output token per input token. */
+  spotPrice: number;
+  /** Execution price of this trade: output token per input token. */
+  executionPrice: number;
+  /** Reserve of the input token after the swap. */
+  newReserveIn: number;
+  /** Reserve of the output token after the swap. */
+  newReserveOut: number;
+  /** Spot price after the swap. */
+  newSpotPrice: number;
+};
+
+/**
+ * Estimates swap output using the constant-product AMM formula (x·y = k)
+ * with a percentage fee — identical to the on-chain Clarity math.
+ *
+ * All values are in the same unit (human-readable or micro — be consistent).
+ * Returns `null` when the inputs are invalid or there is no liquidity.
+ *
+ * Use this for **instant UI feedback** from a locally cached `PoolState`.
+ * Always confirm with {@link fetchQuoteDetailed} before submitting a tx.
+ *
+ * @example
+ * const est = estimateSwapOut({
+ *   amountIn: 100,
+ *   reserveIn: 50_000,
+ *   reserveOut: 80_000,
+ *   feeBps: 30,
+ * });
+ * // est.amountOut ≈ 157.8
+ * // est.priceImpactPercent ≈ 0.2
+ */
+export const estimateSwapOut = (
+  params: EstimateSwapOutParams,
+): EstimateSwapOutResult | null => {
+  const amountIn = Number(params.amountIn);
+  const reserveIn = Number(params.reserveIn);
+  const reserveOut = Number(params.reserveOut);
+  const feeBps = Number(params.feeBps);
+
+  if (
+    !Number.isFinite(amountIn) ||
+    !Number.isFinite(reserveIn) ||
+    !Number.isFinite(reserveOut) ||
+    !Number.isFinite(feeBps) ||
+    amountIn <= 0 ||
+    reserveIn <= 0 ||
+    reserveOut <= 0 ||
+    feeBps < 0 ||
+    feeBps >= 10_000
+  ) {
+    return null;
+  }
+
+  // Constant-product formula with fee (same as Uniswap v2 / Clarity equivalent)
+  const feeMult = 10_000 - feeBps;
+  const amountInWithFee = amountIn * feeMult;
+  const amountOut = (amountInWithFee * reserveOut) / (10_000 * reserveIn + amountInWithFee);
+  const fee = amountIn * (feeBps / 10_000);
+
+  if (amountOut <= 0 || amountOut >= reserveOut) return null;
+
+  const spotPrice = reserveOut / reserveIn;
+  const executionPrice = amountOut / amountIn;
+  const priceImpactPercent = Math.max(0, ((spotPrice - executionPrice) / spotPrice) * 100);
+
+  const newReserveIn = reserveIn + amountIn;
+  const newReserveOut = reserveOut - amountOut;
+  const newSpotPrice = newReserveOut / newReserveIn;
+
+  return {
+    amountOut,
+    fee,
+    priceImpactPercent,
+    spotPrice,
+    executionPrice,
+    newReserveIn,
+    newReserveOut,
+    newSpotPrice,
+  };
+};
+
+/**
+ * Returns the current spot price of a pool: how many output tokens per one
+ * input token, before fees, based on the reserve ratio.
+ *
+ * @example
+ * estimateSpotPrice(50_000, 80_000) // → 1.6  (1 X = 1.6 Y)
+ */
+export const estimateSpotPrice = (
+  reserveIn: number,
+  reserveOut: number,
+): number | null => {
+  const ri = Number(reserveIn);
+  const ro = Number(reserveOut);
+  if (!Number.isFinite(ri) || !Number.isFinite(ro) || ri <= 0 || ro <= 0) return null;
+  return ro / ri;
 };
