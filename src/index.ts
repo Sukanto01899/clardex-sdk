@@ -806,6 +806,20 @@ export const createClardexClient = (opts: ClardexClientOptions) => {
     ) {
       return buildSplitSwapCalls({ ...params, pool: params.pool ?? pool });
     },
+
+    buildGetLPBalanceCall(userAddress: string, targetPool?: PoolContract) {
+      return buildGetLPBalanceCall(targetPool ?? pool, userAddress);
+    },
+
+    fetchUserLPBalance(userAddress: string, targetPool?: PoolContract) {
+      return fetchUserLPBalance(network, targetPool ?? pool, userAddress);
+    },
+
+    estimateLiquidityShares(
+      params: Omit<EstimateLiquiditySharesParams, "decimals"> & { decimals?: number },
+    ) {
+      return estimateLiquidityShares({ ...params, decimals: params.decimals ?? decimals });
+    },
   };
 };
 
@@ -3040,4 +3054,152 @@ export const buildSplitSwapCalls = (
   );
 
   return { calls, splitCount, amountInPerCall, minOutPerCall };
+};
+
+// ---------------------------------------------------------------------------
+// LP balance & liquidity share estimation
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds a read-only contract call for `get-lp-balance` — the user's current
+ * LP share balance in a pool.
+ */
+export const buildGetLPBalanceCall = (
+  pool: PoolContract,
+  userAddress: string,
+): ContractCall => ({
+  contractAddress: pool.address,
+  contractName: pool.name,
+  functionName: "get-lp-balance",
+  functionArgs: [standardPrincipalCV(userAddress)],
+});
+
+/**
+ * Fetches a user's LP share balance from the pool contract.
+ *
+ * The returned value is in the same raw integer unit as `PoolState.totalShares`,
+ * so `lpBalance / totalShares` gives the pool ownership fraction directly.
+ *
+ * @example
+ * const lpBalance = await fetchUserLPBalance(network, pool, "SP...");
+ * const poolShare = lpBalance / poolState.totalShares; // e.g. 0.05 = 5%
+ */
+export const fetchUserLPBalance = async (
+  network: StacksNetwork,
+  pool: PoolContract,
+  userAddress: string,
+): Promise<number> => {
+  const raw = await fetchCallReadOnlyFunction({
+    contractAddress: pool.address,
+    contractName: pool.name,
+    functionName: "get-lp-balance",
+    functionArgs: [standardPrincipalCV(userAddress)],
+    senderAddress: userAddress,
+    network,
+  });
+  return normalizePoolTotalShares(unwrapReadOnlyOk(raw));
+};
+
+export type EstimateLiquiditySharesParams = {
+  /** Amount of token X to deposit (human-readable). */
+  amountX: number;
+  /** Amount of token Y to deposit (human-readable). */
+  amountY: number;
+  /** Current pool state from {@link fetchPoolState} or {@link fetchPoolSnapshot}. */
+  pool: PoolState;
+  /**
+   * Token decimal multiplier, e.g. `1_000_000` for 6-decimal tokens.
+   * Default `1_000_000`.
+   */
+  decimals?: number;
+};
+
+export type EstimateLiquiditySharesResult = {
+  /**
+   * Estimated LP shares minted (raw integer, same unit as `PoolState.totalShares`).
+   * Use `shares / (pool.totalShares + shares)` to get the post-deposit pool share.
+   */
+  shares: number;
+  /**
+   * Actual token X consumed after ratio balancing.
+   * May be less than `amountX` when Y is the constraining side.
+   */
+  actualX: number;
+  /**
+   * Actual token Y consumed after ratio balancing.
+   * May be less than `amountY` when X is the constraining side.
+   */
+  actualY: number;
+  /** Ownership fraction of the pool after deposit, 0–1. */
+  poolShareAfter: number;
+  /** `true` when the pool has no liquidity yet — first deposit sets the price. */
+  initializing: boolean;
+};
+
+/**
+ * Estimates the LP shares a deposit would yield using the same constant-product
+ * math as the on-chain contract — no network call required.
+ *
+ * When the pool is being initialized (`pool.totalShares === 0`), shares are
+ * calculated as `√(amountX_micro × amountY_micro)`.
+ * Otherwise the constraining side determines the share count and the other
+ * side is adjusted to maintain the current ratio.
+ *
+ * @example
+ * const est = estimateLiquidityShares({ amountX: 100, amountY: 160, pool });
+ * console.log(est.shares);      // raw LP shares to be minted
+ * console.log(est.actualX);     // may be < 100 if Y side is constrained
+ * console.log(est.poolShareAfter * 100); // e.g. "2.34%"
+ */
+export const estimateLiquidityShares = (
+  params: EstimateLiquiditySharesParams,
+): EstimateLiquiditySharesResult | null => {
+  const decimals = params.decimals ?? DEFAULT_DECIMALS;
+  const amountX = Number(params.amountX);
+  const amountY = Number(params.amountY);
+
+  if (
+    !Number.isFinite(amountX) || !Number.isFinite(amountY) ||
+    amountX < 0 || amountY < 0
+  ) return null;
+
+  const { reserveX, reserveY, totalShares } = params.pool;
+  const initializing = totalShares === 0;
+
+  // Convert inputs to micro for integer arithmetic
+  const amountXMicro = Math.floor(amountX * decimals);
+  const amountYMicro = Math.floor(amountY * decimals);
+
+  if (initializing) {
+    // First deposit: shares = √(amountX_micro × amountY_micro)
+    if (amountXMicro <= 0 || amountYMicro <= 0) return null;
+    const shares = Math.floor(Math.sqrt(amountXMicro * amountYMicro));
+    if (shares <= 0) return null;
+    return {
+      shares,
+      actualX: amountX,
+      actualY: amountY,
+      poolShareAfter: 1,
+      initializing: true,
+    };
+  }
+
+  if (reserveX <= 0 || reserveY <= 0 || totalShares <= 0) return null;
+
+  const reserveXMicro = Math.floor(reserveX * decimals);
+  const reserveYMicro = Math.floor(reserveY * decimals);
+
+  // Shares from each side — take the minimum (constraining side)
+  const sharesFromX = (amountXMicro * totalShares) / reserveXMicro;
+  const sharesFromY = (amountYMicro * totalShares) / reserveYMicro;
+  const shares = Math.floor(Math.min(sharesFromX, sharesFromY));
+
+  if (shares <= 0) return null;
+
+  // Actual amounts consumed at the constrained share count
+  const actualX = (shares * reserveXMicro) / totalShares / decimals;
+  const actualY = (shares * reserveYMicro) / totalShares / decimals;
+  const poolShareAfter = shares / (totalShares + shares);
+
+  return { shares, actualX, actualY, poolShareAfter, initializing: false };
 };
