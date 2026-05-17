@@ -800,6 +800,12 @@ export const createClardexClient = (opts: ClardexClientOptions) => {
     estimateSpotPrice(reserveIn: number, reserveOut: number) {
       return estimateSpotPrice(reserveIn, reserveOut);
     },
+
+    buildSplitSwapCalls(
+      params: Omit<BuildSplitSwapCallsParams, "pool"> & { pool?: PoolContract },
+    ) {
+      return buildSplitSwapCalls({ ...params, pool: params.pool ?? pool });
+    },
   };
 };
 
@@ -2954,4 +2960,84 @@ export const estimateSpotPrice = (
   const ro = Number(reserveOut);
   if (!Number.isFinite(ri) || !Number.isFinite(ro) || ri <= 0 || ro <= 0) return null;
   return ro / ri;
+};
+
+// ---------------------------------------------------------------------------
+// Split swap calls
+// ---------------------------------------------------------------------------
+
+export type BuildSplitSwapCallsParams = Omit<SwapParams, "amountIn" | "minOut"> & {
+  /**
+   * Total input amount to split across all calls (human-readable number).
+   * Must be a plain `number` so it can be divided evenly.
+   */
+  amountIn: number;
+  /**
+   * Total minimum output across all calls. Divided evenly between splits.
+   * Defaults to `0` (no minimum per split).
+   */
+  minOut?: number;
+  /**
+   * How many equal-sized calls to build. Clamped to [1, 100].
+   * Use {@link suggestSplitCount} to calculate a good value from price impact.
+   */
+  splitCount: number;
+};
+
+export type SplitSwapCallsResult = {
+  /** Individual contract calls, each swapping `amountInPerCall` tokens. */
+  calls: ContractCall[];
+  /** Actual split count used after clamping. */
+  splitCount: number;
+  /** Input amount for each individual call. */
+  amountInPerCall: number;
+  /** Minimum output for each individual call (`minOut / splitCount`). */
+  minOutPerCall: number;
+};
+
+/**
+ * Builds `splitCount` equal swap contract calls from a single large swap,
+ * reducing price impact by spreading the trade across multiple transactions.
+ *
+ * Pair with {@link suggestSplitCount} to determine the right number of splits:
+ *
+ * @example
+ * const impact = 18; // % from fetchQuoteDetailed
+ * const count = suggestSplitCount(impact); // → 4
+ *
+ * const { calls, amountInPerCall } = buildSplitSwapCalls({
+ *   splitCount: count,
+ *   amountIn: 400,
+ *   minOut: 620,
+ *   pool, tokenX, tokenY,
+ *   direction: "x-to-y",
+ *   recipient: "SP...",
+ *   deadline: deadlineSecondsFromNow(30),
+ * });
+ * // calls.length === 4, each swaps 100 tokens with minOut 155
+ */
+export const buildSplitSwapCalls = (
+  params: BuildSplitSwapCallsParams,
+): SplitSwapCallsResult => {
+  const splitCount = Math.min(100, Math.max(1, Math.round(Number(params.splitCount))));
+  const totalAmountIn = Number(params.amountIn);
+  const totalMinOut = Number(params.minOut ?? 0);
+
+  if (!Number.isFinite(totalAmountIn) || totalAmountIn <= 0) {
+    throw new Error("buildSplitSwapCalls: amountIn must be a positive number.");
+  }
+  if (!Number.isFinite(totalMinOut) || totalMinOut < 0) {
+    throw new Error("buildSplitSwapCalls: minOut must be a non-negative number.");
+  }
+
+  const amountInPerCall = totalAmountIn / splitCount;
+  const minOutPerCall = totalMinOut / splitCount;
+
+  const { splitCount: _sc, minOut: _mo, ...baseParams } = params;
+
+  const calls = Array.from({ length: splitCount }, () =>
+    buildSwapCall({ ...baseParams, amountIn: amountInPerCall, minOut: minOutPerCall }),
+  );
+
+  return { calls, splitCount, amountInPerCall, minOutPerCall };
 };
