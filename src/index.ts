@@ -3203,3 +3203,59 @@ export const estimateLiquidityShares = (
 
   return { shares, actualX, actualY, poolShareAfter, initializing: false };
 };
+
+// ---------------------------------------------------------------------------
+// Quote serialization
+// ---------------------------------------------------------------------------
+
+/**
+ * JSON-safe version of {@link QuoteDetailedResult}: the four `bigint` fields
+ * (`amountInMicro`, `expectedOutMicro`, `minOutMicro`, `feeMicro`) are
+ * represented as decimal strings so the object survives `JSON.stringify`,
+ * storage, and network transport without silent data loss.
+ */
+export type SerializedQuote = Omit<
+  QuoteDetailedResult,
+  "amountInMicro" | "expectedOutMicro" | "minOutMicro" | "feeMicro"
+> & {
+  amountInMicro: string;
+  expectedOutMicro: string;
+  minOutMicro: string | null;
+  feeMicro: string;
+};
+
+/**
+ * Converts a {@link QuoteDetailedResult} to a {@link SerializedQuote} by
+ * turning every `bigint` field into its decimal string representation.
+ * The result is safe to pass to `JSON.stringify`, store in a database, or
+ * send over a network.
+ *
+ * @example
+ * const quote = await client.fetchQuoteDetailed({ ... });
+ * const payload = JSON.stringify(serializeQuote(quote));
+ */
+export const serializeQuote = (quote: QuoteDetailedResult): SerializedQuote => ({
+  ...quote,
+  amountInMicro: quote.amountInMicro.toString(),
+  expectedOutMicro: quote.expectedOutMicro.toString(),
+  minOutMicro: quote.minOutMicro === null ? null : quote.minOutMicro.toString(),
+  feeMicro: quote.feeMicro.toString(),
+});
+
+/**
+ * Restores a {@link SerializedQuote} back to a full {@link QuoteDetailedResult}
+ * by parsing the string micro fields back to `bigint`.
+ *
+ * Throws if any string field is not a valid integer.
+ *
+ * @example
+ * const quote = deserializeQuote(JSON.parse(payload));
+ * quote.amountInMicro; // bigint
+ */
+export const deserializeQuote = (raw: SerializedQuote): QuoteDetailedResult => ({
+  ...raw,
+  amountInMicro: BigInt(raw.amountInMicro),
+  expectedOutMicro: BigInt(raw.expectedOutMicro),
+  minOutMicro: raw.minOutMicro === null ? null : BigInt(raw.minOutMicro),
+  feeMicro: BigInt(raw.feeMicro),
+});
