@@ -67,6 +67,8 @@ import {
   tokenRefToAssetId,
   tryParseTokenRef,
   isValidTokenRef,
+  isStxRef,
+  isSip10Ref,
   parsePoolContract,
   formatPoolContract,
   tryParsePoolContract,
@@ -207,6 +209,17 @@ describe("clardex-sdk builders", () => {
     expect(isValidTokenRef("SP000000000000000000002Q6VF78.token-x")).toBe(true);
     expect(isValidTokenRef({ type: "sip10", contract: "SP000000000000000000002Q6VF78.token-x" })).toBe(true);
     expect(isValidTokenRef({ type: "sip10" })).toBe(false);
+  });
+
+  it("narrows TokenRef with isStxRef/isSip10Ref", () => {
+    const stx = parseTokenRef("STX");
+    const sip10 = parseTokenRef("SP000000000000000000002Q6VF78.token-x");
+
+    expect(isStxRef(stx)).toBe(true);
+    expect(isSip10Ref(stx)).toBe(false);
+
+    expect(isStxRef(sip10)).toBe(false);
+    expect(isSip10Ref(sip10)).toBe(true);
   });
 
   it("calculates price impact vs spot using execution price", () => {

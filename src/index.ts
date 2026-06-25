@@ -81,8 +81,16 @@ export const tryParseTokenRef = (value: unknown): TokenRef | null => {
 export const isValidTokenRef = (value: unknown): boolean =>
   tryParseTokenRef(value) !== null;
 
+export const isStxRef = (
+  token: TokenRef,
+): token is Extract<TokenRef, { type: "stx" }> => token.type === "stx";
+
+export const isSip10Ref = (
+  token: TokenRef,
+): token is Extract<TokenRef, { type: "sip10" }> => token.type === "sip10";
+
 export const formatTokenRef = (token: TokenRef): TokenRefString => {
-  if (token.type === "stx") return "STX";
+  if (isStxRef(token)) return "STX";
   const contract = toContractIdString(token.contract);
   const asset = String(token.asset ?? "").trim();
   if (asset) return `${contract}::${asset}`;
@@ -90,7 +98,7 @@ export const formatTokenRef = (token: TokenRef): TokenRefString => {
 };
 
 export const tokenRefToAssetId = (token: TokenRef): "STX" | `${string}.${string}::${string}` => {
-  if (token.type === "stx") return "STX";
+  if (isStxRef(token)) return "STX";
   const contract = toContractIdString(token.contract);
   const asset = getSip10AssetName({ ...token, contract });
   return buildTokenId(contract, asset) as `${string}.${string}::${string}`;
@@ -445,7 +453,7 @@ export const buildHiroTokenContractUrl = (
   network: Network = "mainnet",
 ): string | null => {
   const ref = parseTokenRef(token);
-  if (ref.type === "stx") return null;
+  if (isStxRef(ref)) return null;
   return buildHiroContractUrl(ref.contract, network);
 };
 
@@ -982,7 +990,7 @@ export const getCachedTokenInfo = (
 };
 
 const tokenToOptionalCv = (token: TokenRef) => {
-  if (token.type === "stx") return noneCV();
+  if (isStxRef(token)) return noneCV();
   const { address, name } = parseContractPrincipal(token.contract);
   return someCV(contractPrincipalCV(address, name));
 };
@@ -1639,7 +1647,7 @@ export const buildSwapPostConditions = (params: {
   const sender = String(params.senderAddress || "").trim();
   if (!sender) throw new Error("senderAddress is required.");
 
-  if (params.tokenIn.type === "stx") {
+  if (isStxRef(params.tokenIn)) {
     return [Pc.principal(sender).willSendLte(amountInMicro).ustx()];
   }
 
@@ -1670,7 +1678,7 @@ export const buildAddLiquidityPostConditions = (params: {
 
   const pcs: PostCondition[] = [];
 
-  if (params.tokenX.type === "stx") {
+  if (isStxRef(params.tokenX)) {
     pcs.push(Pc.principal(sender).willSendLte(amountXMicro).ustx());
   } else {
     pcs.push(
@@ -1680,7 +1688,7 @@ export const buildAddLiquidityPostConditions = (params: {
     );
   }
 
-  if (params.tokenY.type === "stx") {
+  if (isStxRef(params.tokenY)) {
     pcs.push(Pc.principal(sender).willSendLte(amountYMicro).ustx());
   } else {
     pcs.push(
@@ -1744,8 +1752,8 @@ export const buildAddLiquidityCall = (
       functionArgs: [
         tokenToOptionalCv(params.tokenX),
         tokenToOptionalCv(params.tokenY),
-        boolCV(params.tokenX.type === "stx"),
-        boolCV(params.tokenY.type === "stx"),
+        boolCV(isStxRef(params.tokenX)),
+        boolCV(isStxRef(params.tokenY)),
         uintCV(amountXMicro),
         uintCV(amountYMicro),
       ],
