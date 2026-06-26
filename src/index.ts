@@ -2863,6 +2863,25 @@ export const parseAmount = (raw: unknown): number | null => {
   return n;
 };
 
+/**
+ * Formats a pool fee given in basis points as a display percentage.
+ *
+ * @example
+ * formatFeeBps(30)    // "0.30%"
+ * formatFeeBps(100)   // "1.00%"
+ * formatFeeBps(5)     // "0.05%"
+ * formatFeeBps(NaN)   // "—"
+ */
+export const formatFeeBps = (
+  feeBps: number,
+  opts: { maxDecimals?: number } = {},
+): string => {
+  const bps = Number(feeBps);
+  if (!Number.isFinite(bps)) return "—";
+  const maxDecimals = opts.maxDecimals ?? 2;
+  return `${(bps / 100).toFixed(maxDecimals)}%`;
+};
+
 // ---------------------------------------------------------------------------
 // Local AMM math (no network required)
 // ---------------------------------------------------------------------------

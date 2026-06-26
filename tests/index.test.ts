@@ -38,6 +38,7 @@ import {
   toMicroAmount,
   fromMicroAmount,
   formatMicroAmount,
+  formatFeeBps,
   parseContractPrincipal,
   buildContractPrincipal,
   isValidContractPrincipal,
@@ -610,6 +611,14 @@ describe("clardex-sdk swap helpers", () => {
       "1.2",
     );
     expect(formatMicroAmount(-1_000_000n, 1_000_000)).toBe("-1");
+  });
+
+  it("formats fee bps as a display percentage", () => {
+    expect(formatFeeBps(30)).toBe("0.30%");
+    expect(formatFeeBps(100)).toBe("1.00%");
+    expect(formatFeeBps(5)).toBe("0.05%");
+    expect(formatFeeBps(30, { maxDecimals: 0 })).toBe("0%");
+    expect(formatFeeBps(NaN)).toBe("—");
   });
 
   it("validates stacks addresses and builds deadlines", () => {
