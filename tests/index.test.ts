@@ -48,6 +48,8 @@ import {
   requireContractPrincipal,
   nowSeconds,
   deadlineSecondsFromNow,
+  secondsUntilDeadline,
+  isDeadlineExpired,
   parseTokenIdStrict,
   buildTokenId,
   isValidTokenId,
@@ -626,6 +628,17 @@ describe("clardex-sdk swap helpers", () => {
     expect(isValidStacksAddress("not-an-address")).toBe(false);
     expect(nowSeconds(new Date(0))).toBe(0);
     expect(deadlineSecondsFromNow(10, 100)).toBe(700);
+  });
+
+  it("checks deadline expiry", () => {
+    const deadline = deadlineSecondsFromNow(10, 100);
+    expect(secondsUntilDeadline(deadline, 100)).toBe(600);
+    expect(secondsUntilDeadline(deadline, 700)).toBe(0);
+    expect(secondsUntilDeadline(deadline, 800)).toBe(-100);
+
+    expect(isDeadlineExpired(deadline, 100)).toBe(false);
+    expect(isDeadlineExpired(deadline, 700)).toBe(true);
+    expect(isDeadlineExpired(deadline, 800)).toBe(true);
   });
 
   it("parses and builds contract principals", () => {

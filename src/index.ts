@@ -849,6 +849,32 @@ export const deadlineSecondsFromNow = (
   now = nowSeconds(),
 ) => now + Math.max(0, Math.floor(Number(minutesFromNow) * 60));
 
+/**
+ * Seconds remaining until a deadline built with {@link deadlineSecondsFromNow}.
+ * Negative once the deadline has passed.
+ *
+ * @example
+ * const deadline = deadlineSecondsFromNow(30);
+ * secondsUntilDeadline(deadline); // ≈ 1800
+ */
+export const secondsUntilDeadline = (
+  deadline: number,
+  now = nowSeconds(),
+) => Math.floor(Number(deadline)) - now;
+
+/**
+ * Whether a deadline built with {@link deadlineSecondsFromNow} has already passed.
+ *
+ * @example
+ * const deadline = deadlineSecondsFromNow(30);
+ * isDeadlineExpired(deadline); // false
+ * isDeadlineExpired(deadline, deadline + 1); // true
+ */
+export const isDeadlineExpired = (
+  deadline: number,
+  now = nowSeconds(),
+) => secondsUntilDeadline(deadline, now) <= 0;
+
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
