@@ -972,6 +972,30 @@ export const calculatePriceImpactPercent = (
   return Number.isFinite(impact) ? Math.max(0, impact) : 0;
 };
 
+/**
+ * Calculates the percentage change from `oldValue` to `newValue`, e.g. for
+ * a 24h price/reserve/volume comparison. Returns `null` when `oldValue` is
+ * missing or not a positive finite number, since no meaningful percentage
+ * can be computed from a zero/negative/unknown baseline.
+ *
+ * Pairs naturally with {@link formatSignedPercent} for display.
+ *
+ * @example
+ * calculatePercentChange(100, 120)  // 20
+ * calculatePercentChange(100, 90)   // -10
+ * calculatePercentChange(0, 50)     // null
+ * calculatePercentChange(null, 50)  // null
+ */
+export const calculatePercentChange = (
+  oldValue: number | null | undefined,
+  newValue: number | null | undefined,
+): number | null => {
+  const prev = Number(oldValue);
+  const next = Number(newValue);
+  if (!Number.isFinite(prev) || prev <= 0 || !Number.isFinite(next)) return null;
+  return ((next - prev) / prev) * 100;
+};
+
 export type SlippageSuggestionOptions = {
   fallbackPct?: number;
   basePct?: number;

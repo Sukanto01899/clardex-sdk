@@ -20,6 +20,7 @@ import {
   createClardexClient,
   estimatePriceImpactPercent,
   calculatePriceImpactPercent,
+  calculatePercentChange,
   suggestSlippagePercent,
   clampSlippagePercent,
   suggestSplitCount,
@@ -273,6 +274,15 @@ describe("clardex-sdk builders", () => {
     const impact = calculatePriceImpactPercent(100, 90.9090909, 1000, 1000);
     expect(impact).toBeGreaterThan(9);
     expect(impact).toBeLessThan(9.2);
+  });
+
+  it("calculates percent change from a baseline value", () => {
+    expect(calculatePercentChange(100, 120)).toBe(20);
+    expect(calculatePercentChange(100, 90)).toBe(-10);
+    expect(calculatePercentChange(0, 50)).toBeNull();
+    expect(calculatePercentChange(-5, 50)).toBeNull();
+    expect(calculatePercentChange(null, 50)).toBeNull();
+    expect(calculatePercentChange(100, NaN)).toBeNull();
   });
 
   it("normalizes and validates Stacks addresses", () => {
