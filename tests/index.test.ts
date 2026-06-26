@@ -21,6 +21,7 @@ import {
   estimatePriceImpactPercent,
   calculatePriceImpactPercent,
   suggestSlippagePercent,
+  clampSlippagePercent,
   suggestSplitCount,
   calculateMinOut,
   calculateMinOutMicro,
@@ -515,6 +516,16 @@ describe("clardex-sdk swap helpers", () => {
     expect(suggestSlippagePercent(0)).toBe(0.5);
     expect(suggestSlippagePercent(10)).toBe(2.3);
     expect(suggestSlippagePercent(50)).toBe(3);
+  });
+
+  it("clamps user-typed slippage input to a safe range", () => {
+    expect(clampSlippagePercent("0.5")).toBe(0.5);
+    expect(clampSlippagePercent("120")).toBe(50);
+    expect(clampSlippagePercent("-1")).toBe(0);
+    expect(clampSlippagePercent("abc")).toBe(0.5);
+    expect(clampSlippagePercent("")).toBe(0.5);
+    expect(clampSlippagePercent("7", { maxPct: 5, fallbackPct: 1 })).toBe(5);
+    expect(clampSlippagePercent(null, { fallbackPct: 1 })).toBe(1);
   });
 
   it("suggests split counts for high impact swaps", () => {

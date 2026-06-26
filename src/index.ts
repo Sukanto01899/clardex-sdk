@@ -947,6 +947,38 @@ export const suggestSlippagePercent = (
   return Math.round(rounded * 1000) / 1000;
 };
 
+export type SlippageClampOptions = {
+  minPct?: number;
+  maxPct?: number;
+  fallbackPct?: number;
+};
+
+/**
+ * Clamps a user-typed slippage percentage into a safe range, falling back
+ * to a sane default when the input is missing or not a valid number.
+ *
+ * Use this on the raw text from a slippage % input field before passing the
+ * result to {@link calculateMinOut} / {@link calculateMinOutMicro}.
+ *
+ * @example
+ * clampSlippagePercent("0.5")   // 0.5
+ * clampSlippagePercent("120")   // 50  (clamped to maxPct)
+ * clampSlippagePercent("-1")    // 0   (clamped to minPct)
+ * clampSlippagePercent("abc")   // 0.5 (fallback)
+ * clampSlippagePercent("")      // 0.5 (fallback)
+ */
+export const clampSlippagePercent = (
+  rawValue: unknown,
+  opts: SlippageClampOptions = {},
+): number => {
+  const minPct = opts.minPct ?? 0;
+  const maxPct = opts.maxPct ?? 50;
+  const fallbackPct = opts.fallbackPct ?? 0.5;
+  const parsed = parseAmount(rawValue);
+  if (parsed === null) return fallbackPct;
+  return clampNumber(parsed, minPct, maxPct);
+};
+
 export const suggestSplitCount = (
   priceImpactPercent: number,
   targetImpactPercent = 5,
