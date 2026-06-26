@@ -559,6 +559,62 @@ export const buildClardexAppUrl = (
   return url.toString();
 };
 
+const CLARDEX_APP_TABS: ClardexAppTab[] = [
+  "swap",
+  "prices",
+  "pools",
+  "analytics",
+  "liquidity",
+];
+
+export type ParsedClardexAppUrlParams = {
+  pool: string | null;
+  tab: ClardexAppTab | null;
+  dir: "x-to-y" | "y-to-x" | null;
+  amount: number | null;
+  slippage: number | null;
+  deadline: number | null;
+};
+
+/**
+ * Parses the query params produced by {@link buildClardexAppUrl} back out of
+ * a full URL (e.g. `window.location.href`), coercing each field to its
+ * proper type and returning `null` for anything missing or invalid.
+ *
+ * @example
+ * const params = parseClardexAppUrl(window.location.href);
+ * if (params.dir) setSwapDirection(params.dir);
+ * if (params.amount !== null) setSwapInput(String(params.amount));
+ */
+export const parseClardexAppUrl = (
+  url: string | URL,
+): ParsedClardexAppUrlParams => {
+  const parsed = typeof url === "string" ? new URL(url) : url;
+  const params = parsed.searchParams;
+
+  const tabRaw = params.get("tab");
+  const tab = CLARDEX_APP_TABS.includes(tabRaw as ClardexAppTab)
+    ? (tabRaw as ClardexAppTab)
+    : null;
+
+  const dirRaw = params.get("dir");
+  const dir = dirRaw === "x-to-y" || dirRaw === "y-to-x" ? dirRaw : null;
+
+  const poolRaw = params.get("pool");
+  const pool = poolRaw && poolRaw.trim() ? poolRaw.trim() : null;
+
+  const amountRaw = params.get("amount");
+  const amount = amountRaw === null ? null : parseAmount(amountRaw);
+
+  const slippageRaw = params.get("slippage");
+  const slippage = slippageRaw === null ? null : parseAmount(slippageRaw);
+
+  const deadlineRaw = params.get("deadline");
+  const deadline = deadlineRaw === null ? null : parseAmount(deadlineRaw);
+
+  return { pool, tab, dir, amount, slippage, deadline };
+};
+
 export type ClardexClientOptions = {
   network: StacksNetwork;
   pool: PoolContract;
@@ -2938,6 +2994,26 @@ export const formatFeeBps = (
   if (!Number.isFinite(bps)) return "—";
   const maxDecimals = opts.maxDecimals ?? 2;
   return `${(bps / 100).toFixed(maxDecimals)}%`;
+};
+
+/**
+ * Formats a percentage value with an explicit `+`/`-` sign, e.g. for 24h
+ * price change or PnL. Returns `"N/A"` for `null`/non-finite input.
+ *
+ * @example
+ * formatSignedPercent(5.2)    // "+5.20%"
+ * formatSignedPercent(-3.1)   // "-3.10%"
+ * formatSignedPercent(0)      // "0.00%"
+ * formatSignedPercent(null)   // "N/A"
+ */
+export const formatSignedPercent = (
+  value: number | null,
+  opts: { maxDecimals?: number } = {},
+): string => {
+  if (value === null || !Number.isFinite(value)) return "N/A";
+  const maxDecimals = opts.maxDecimals ?? 2;
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(maxDecimals)}%`;
 };
 
 // ---------------------------------------------------------------------------

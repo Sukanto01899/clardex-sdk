@@ -36,10 +36,12 @@ import {
   shortenStacksAddress,
   shortenTxid,
   buildClardexAppUrl,
+  parseClardexAppUrl,
   toMicroAmount,
   fromMicroAmount,
   formatMicroAmount,
   formatFeeBps,
+  formatSignedPercent,
   parseContractPrincipal,
   buildContractPrincipal,
   isValidContractPrincipal,
@@ -131,6 +133,46 @@ describe("clardex-sdk builders", () => {
     expect(parsed.searchParams.get("amount")).toBe("1.25");
     expect(parsed.searchParams.get("slippage")).toBe("0.5");
     expect(parsed.searchParams.get("deadline")).toBe("30");
+  });
+
+  it("parses Clardex app deep links back into typed params", () => {
+    const url = buildClardexAppUrl("https://example.com", {
+      pool: "SP000000000000000000002Q6VF78.dex-pool-v5",
+      tab: "swap",
+      dir: "x-to-y",
+      amount: "1.25",
+      slippage: 0.5,
+      deadline: 30,
+    });
+
+    expect(parseClardexAppUrl(url)).toEqual({
+      pool: "SP000000000000000000002Q6VF78.dex-pool-v5",
+      tab: "swap",
+      dir: "x-to-y",
+      amount: 1.25,
+      slippage: 0.5,
+      deadline: 30,
+    });
+
+    expect(parseClardexAppUrl("https://example.com")).toEqual({
+      pool: null,
+      tab: null,
+      dir: null,
+      amount: null,
+      slippage: null,
+      deadline: null,
+    });
+
+    expect(
+      parseClardexAppUrl("https://example.com?tab=bogus&dir=sideways&amount=abc"),
+    ).toEqual({
+      pool: null,
+      tab: null,
+      dir: null,
+      amount: null,
+      slippage: null,
+      deadline: null,
+    });
   });
 
   it("creates pool parts from a contract principal", () => {
@@ -632,6 +674,15 @@ describe("clardex-sdk swap helpers", () => {
     expect(formatFeeBps(5)).toBe("0.05%");
     expect(formatFeeBps(30, { maxDecimals: 0 })).toBe("0%");
     expect(formatFeeBps(NaN)).toBe("—");
+  });
+
+  it("formats signed percentages with explicit sign", () => {
+    expect(formatSignedPercent(5.2)).toBe("+5.20%");
+    expect(formatSignedPercent(-3.1)).toBe("-3.10%");
+    expect(formatSignedPercent(0)).toBe("0.00%");
+    expect(formatSignedPercent(null)).toBe("N/A");
+    expect(formatSignedPercent(NaN)).toBe("N/A");
+    expect(formatSignedPercent(1.234, { maxDecimals: 1 })).toBe("+1.2%");
   });
 
   it("validates stacks addresses and builds deadlines", () => {
