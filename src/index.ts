@@ -3016,6 +3016,27 @@ export const formatSignedPercent = (
   return `${sign}${value.toFixed(maxDecimals)}%`;
 };
 
+/**
+ * Formats a 0–1 fraction (e.g. pool share, ratio drift) as a display
+ * percentage. Unlike {@link formatSignedPercent}, the input is a fraction
+ * (0.05 → "5.00%"), not an already-scaled percent value.
+ *
+ * @example
+ * formatFractionAsPercent(0.1234)   // "12.34%"
+ * formatFractionAsPercent(1)        // "100.00%"
+ * formatFractionAsPercent(0.5, { maxDecimals: 0 })  // "50%"
+ * formatFractionAsPercent(NaN)      // "—"
+ */
+export const formatFractionAsPercent = (
+  fraction: number,
+  opts: { maxDecimals?: number } = {},
+): string => {
+  const value = Number(fraction);
+  if (!Number.isFinite(value)) return "—";
+  const maxDecimals = opts.maxDecimals ?? 2;
+  return `${(value * 100).toFixed(maxDecimals)}%`;
+};
+
 // ---------------------------------------------------------------------------
 // Local AMM math (no network required)
 // ---------------------------------------------------------------------------

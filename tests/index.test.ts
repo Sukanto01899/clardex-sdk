@@ -42,6 +42,7 @@ import {
   formatMicroAmount,
   formatFeeBps,
   formatSignedPercent,
+  formatFractionAsPercent,
   parseContractPrincipal,
   buildContractPrincipal,
   isValidContractPrincipal,
@@ -683,6 +684,13 @@ describe("clardex-sdk swap helpers", () => {
     expect(formatSignedPercent(null)).toBe("N/A");
     expect(formatSignedPercent(NaN)).toBe("N/A");
     expect(formatSignedPercent(1.234, { maxDecimals: 1 })).toBe("+1.2%");
+  });
+
+  it("formats a 0-1 fraction as a percentage", () => {
+    expect(formatFractionAsPercent(0.1234)).toBe("12.34%");
+    expect(formatFractionAsPercent(1)).toBe("100.00%");
+    expect(formatFractionAsPercent(0.5, { maxDecimals: 0 })).toBe("50%");
+    expect(formatFractionAsPercent(NaN)).toBe("—");
   });
 
   it("validates stacks addresses and builds deadlines", () => {
