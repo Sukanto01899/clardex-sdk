@@ -2477,6 +2477,47 @@ export const fetchPoolState = async (
 };
 
 // ---------------------------------------------------------------------------
+// Account balances
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts a fungible token's raw balance string from a Hiro
+ * `/extended/v1/address/{address}/balances` response's `fungible_tokens`
+ * map, matching by the full `contract.name::asset` token id first, then
+ * falling back to any key whose trailing `.contractName::assetName` suffix
+ * matches — which handles responses keyed by a different deployer/case
+ * prefix than the one you queried with.
+ *
+ * Returns `undefined` when no match is found (treat as a zero balance).
+ *
+ * @example
+ * const data = await (await fetch(`${apiBase}/extended/v1/address/${addr}/balances`)).json();
+ * const raw = findFungibleTokenBalance(data.fungible_tokens, "SP....token-x::token-x");
+ * const amount = raw ? fromMicroAmount(raw, 1_000_000) : 0;
+ */
+export const findFungibleTokenBalance = (
+  fungibleTokens: Record<string, { balance?: string }> | null | undefined,
+  tokenId: string,
+): string | undefined => {
+  const tokens = fungibleTokens || {};
+  const id = String(tokenId || "").trim();
+  if (!id) return undefined;
+  if (tokens[id]?.balance) return tokens[id].balance;
+
+  const assetIndex = id.indexOf("::");
+  if (assetIndex === -1) return undefined;
+  const contract = id.slice(0, assetIndex);
+  const asset = id.slice(assetIndex + 2);
+  const dotIndex = contract.lastIndexOf(".");
+  if (dotIndex === -1) return undefined;
+  const contractName = contract.slice(dotIndex + 1);
+
+  const suffix = `.${contractName}::${asset}`;
+  const key = Object.keys(tokens).find((k) => k.endsWith(suffix));
+  return key ? tokens[key]?.balance : undefined;
+};
+
+// ---------------------------------------------------------------------------
 // Transaction status
 // ---------------------------------------------------------------------------
 

@@ -23,6 +23,7 @@ import {
   calculatePercentChange,
   calculateRatioDrift,
   hasSufficientAllowance,
+  findFungibleTokenBalance,
   suggestSlippagePercent,
   clampSlippagePercent,
   suggestSplitCount,
@@ -304,6 +305,31 @@ describe("clardex-sdk builders", () => {
     expect(hasSufficientAllowance(0, 0)).toBe(true);
     expect(hasSufficientAllowance(100, 0)).toBe(true);
     expect(hasSufficientAllowance(100, -5)).toBe(true);
+  });
+
+  it("finds a fungible token balance from a Hiro balances response", () => {
+    const fungibleTokens = {
+      "SP000000000000000000002Q6VF78.token-x::token-x": { balance: "1000000" },
+      "SP111111111111111111111111111.other-token::other-token": { balance: "5" },
+    };
+
+    expect(
+      findFungibleTokenBalance(
+        fungibleTokens,
+        "SP000000000000000000002Q6VF78.token-x::token-x",
+      ),
+    ).toBe("1000000");
+
+    // Falls back to a trailing .contractName::asset suffix match when the
+    // exact deployer-prefixed key differs from the one queried with.
+    expect(
+      findFungibleTokenBalance(fungibleTokens, "SP999999999999999999999999999.token-x::token-x"),
+    ).toBe("1000000");
+
+    expect(findFungibleTokenBalance(fungibleTokens, "SP000000000000000000002Q6VF78.nope::nope")).toBeUndefined();
+    expect(findFungibleTokenBalance(null, "SP000000000000000000002Q6VF78.token-x::token-x")).toBeUndefined();
+    expect(findFungibleTokenBalance(fungibleTokens, "")).toBeUndefined();
+    expect(findFungibleTokenBalance(fungibleTokens, "STX")).toBeUndefined();
   });
 
   it("normalizes and validates Stacks addresses", () => {
