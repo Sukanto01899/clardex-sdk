@@ -22,6 +22,7 @@ import {
   calculatePriceImpactPercent,
   calculatePercentChange,
   calculateRatioDrift,
+  hasSufficientAllowance,
   suggestSlippagePercent,
   clampSlippagePercent,
   suggestSplitCount,
@@ -292,6 +293,17 @@ describe("clardex-sdk builders", () => {
     expect(calculateRatioDrift(1.0, 1.0)).toBe(0);
     expect(calculateRatioDrift(1.0, 0)).toBeNull();
     expect(calculateRatioDrift(NaN, 1.0)).toBeNull();
+  });
+
+  it("checks allowance sufficiency with an epsilon for float rounding", () => {
+    expect(hasSufficientAllowance(100, 100)).toBe(true);
+    expect(hasSufficientAllowance(99.999999999999, 100)).toBe(false);
+    expect(hasSufficientAllowance(50, 100)).toBe(false);
+    expect(hasSufficientAllowance(null, 100)).toBe(false);
+    expect(hasSufficientAllowance(undefined, 100)).toBe(false);
+    expect(hasSufficientAllowance(0, 0)).toBe(true);
+    expect(hasSufficientAllowance(100, 0)).toBe(true);
+    expect(hasSufficientAllowance(100, -5)).toBe(true);
   });
 
   it("normalizes and validates Stacks addresses", () => {

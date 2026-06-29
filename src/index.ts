@@ -1023,6 +1023,32 @@ export const calculateRatioDrift = (
   return Math.abs(input - reference) / reference;
 };
 
+/**
+ * Checks whether a token allowance covers a required amount before
+ * submitting a swap/liquidity tx, using a small epsilon so an allowance
+ * that exactly equals the requirement isn't flagged as insufficient due to
+ * floating-point rounding.
+ *
+ * A missing/`null` allowance is treated as `0`. A non-positive
+ * `requiredAmount` always passes (nothing to approve).
+ *
+ * @example
+ * hasSufficientAllowance(100, 100)    // true
+ * hasSufficientAllowance(50, 100)     // false
+ * hasSufficientAllowance(null, 100)   // false
+ * hasSufficientAllowance(100, 0)      // true
+ */
+export const hasSufficientAllowance = (
+  allowance: number | null | undefined,
+  requiredAmount: number,
+): boolean => {
+  const required = Number(requiredAmount);
+  if (!Number.isFinite(required) || required <= 0) return true;
+  const current = Number(allowance ?? 0);
+  if (!Number.isFinite(current)) return false;
+  return current + Number.EPSILON >= required;
+};
+
 export type SlippageSuggestionOptions = {
   fallbackPct?: number;
   basePct?: number;
