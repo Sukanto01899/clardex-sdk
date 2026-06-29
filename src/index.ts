@@ -996,6 +996,33 @@ export const calculatePercentChange = (
   return ((next - prev) / prev) * 100;
 };
 
+/**
+ * Calculates the absolute (unsigned) relative drift between an input ratio
+ * and a reference ratio — e.g. a deposit's tokenY/tokenX ratio vs. the
+ * pool's current reserve ratio, to detect when a liquidity add is off the
+ * pool price. Returns a fraction (multiply by 100, or pass to
+ * {@link formatFractionAsPercent}, for display).
+ *
+ * Returns `null` when `referenceRatio` is not a positive finite number,
+ * since drift can't be measured against a zero/unknown reference.
+ *
+ * @example
+ * calculateRatioDrift(1.1, 1.0)  // 0.1   (10% off the reference)
+ * calculateRatioDrift(1.0, 1.0)  // 0
+ * calculateRatioDrift(1.0, 0)    // null
+ */
+export const calculateRatioDrift = (
+  inputRatio: number,
+  referenceRatio: number,
+): number | null => {
+  const input = Number(inputRatio);
+  const reference = Number(referenceRatio);
+  if (!Number.isFinite(reference) || reference <= 0 || !Number.isFinite(input)) {
+    return null;
+  }
+  return Math.abs(input - reference) / reference;
+};
+
 export type SlippageSuggestionOptions = {
   fallbackPct?: number;
   basePct?: number;

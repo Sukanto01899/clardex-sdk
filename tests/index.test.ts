@@ -21,6 +21,7 @@ import {
   estimatePriceImpactPercent,
   calculatePriceImpactPercent,
   calculatePercentChange,
+  calculateRatioDrift,
   suggestSlippagePercent,
   clampSlippagePercent,
   suggestSplitCount,
@@ -283,6 +284,14 @@ describe("clardex-sdk builders", () => {
     expect(calculatePercentChange(-5, 50)).toBeNull();
     expect(calculatePercentChange(null, 50)).toBeNull();
     expect(calculatePercentChange(100, NaN)).toBeNull();
+  });
+
+  it("calculates unsigned drift between an input ratio and a reference ratio", () => {
+    expect(calculateRatioDrift(1.1, 1.0)).toBeCloseTo(0.1, 10);
+    expect(calculateRatioDrift(0.9, 1.0)).toBeCloseTo(0.1, 10);
+    expect(calculateRatioDrift(1.0, 1.0)).toBe(0);
+    expect(calculateRatioDrift(1.0, 0)).toBeNull();
+    expect(calculateRatioDrift(NaN, 1.0)).toBeNull();
   });
 
   it("normalizes and validates Stacks addresses", () => {
